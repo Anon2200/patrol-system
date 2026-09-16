@@ -4,6 +4,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote, unquote
 
 from fastapi import FastAPI, Request, Form, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -95,7 +96,13 @@ def is_admin(request: Request) -> bool:
 
 
 def get_patrol_name(request: Request) -> Optional[str]:
-    name = request.cookies.get(COOKIE_PATROL_NAME)
+    raw_name = request.cookies.get(COOKIE_PATROL_NAME)
+    if not raw_name:
+        return None
+    try:
+        name = unquote(raw_name)
+    except Exception:
+        return None
     if name in PATROL_NAMES:
         return name
     return None
@@ -153,7 +160,7 @@ def patrol_login(
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(
         key=COOKIE_PATROL_NAME,
-        value=patrol_name,
+        value=quote(patrol_name),
         max_age=COOKIE_MAX_AGE_30_DAYS,
         httponly=True,
         samesite="lax",
