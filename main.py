@@ -14,7 +14,6 @@ templates = Jinja2Templates(directory="templates")
 DB_NAME = "patrol.db"
 ADMIN_PASSWORD = "1029384756"
 
-# База патрульных: ПИН-код -> ФИО
 PATROLS = {
     "1111": "Борисов",
     "2222": "Соколов",
@@ -63,9 +62,7 @@ def is_admin(request: Request):
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, success: str = None, error: str = None):
     raw_patrol_name = request.cookies.get("patrol_name")
-    # Безопасное раскодирование имени из куки
     patrol_name = urllib.parse.unquote(raw_patrol_name) if raw_patrol_name else None
-    
     patrols_list = sorted(list(PATROLS.values()))
     return templates.TemplateResponse("patrol.html", {
         "request": request, 
@@ -79,7 +76,6 @@ async def read_root(request: Request, success: str = None, error: str = None):
 async def patrol_login(patrol_name: str = Form(...), pin: str = Form(...)):
     if pin in PATROLS and PATROLS[pin] == patrol_name:
         response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-        # Кодируем кириллицу в URL-формат (percent-encoding) для безопасной записи в Set-Cookie
         encoded_name = urllib.parse.quote(patrol_name)
         response.set_cookie(key="patrol_name", value=encoded_name, max_age=86400*30, httponly=True)
         return response
@@ -105,8 +101,6 @@ async def add_violation(
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
     patrol_name = urllib.parse.unquote(raw_patrol_name)
-
-    # Фиксация точного времени по Москве (Europe/Moscow)
     created_at = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
     
     cursor = db.cursor()
@@ -127,7 +121,7 @@ async def login_page(request: Request, error: str = None):
 async def login_post(password: str = Form(...)):
     if password == ADMIN_PASSWORD:
         response = RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
-        response.set_cookie(key="auth_role", value="admin", httponly=True)
+        response.set_cookie(key="auth_role", value="admin", max_age=86400, httponly=True)
         return response
     return RedirectResponse(url="/login?error=1", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -200,7 +194,7 @@ async def export_csv(
     rows = cursor.fetchall()
 
     output = io.StringIO()
-    output.write('\ufeff')  # BOM для правильного открытия UTF-8 в Excel
+    output.write('\ufeff')
     writer = csv.writer(output, delimiter=';')
     writer.writerow(["ID", "Дата/Время (МСК)", "Патрульный", "Группа", "ФИО Студента", "Тип нарушения", "Комментарий"])
 
