@@ -10,7 +10,7 @@
     <div class="container py-4" style="max-width: 500px;">
         <div class="card shadow-sm">
             <div class="card-body">
-                <!-- Ссылка на вход в панель администратора -->
+                <!-- Ссылка на вход в админ-панель -->
                 <div class="text-end mb-2">
                     <a href="/login" class="text-decoration-none text-muted small">Вход для администратора →</a>
                 </div>
@@ -25,7 +25,7 @@
                 {% endif %}
 
                 {% if not patrol_name %}
-                    <!-- Форма входа патрульного -->
+                    <!-- Форма входа для патрульного -->
                     <form action="/patrol/login" method="post">
                         <div class="mb-3">
                             <label class="form-label">Выберите патрульного:</label>
