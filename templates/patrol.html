@@ -3,81 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Патрульная служба</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Патрульная служба колледжа</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; box-sizing: border-box; }
+        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 450px; }
+        h2 { margin-top: 0; color: #333; text-align: center; }
+        .error { color: #e74c3c; background: #fdeaea; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; text-align: center; }
+        .success { color: #27ae60; background: #eafaf1; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; text-align: center; }
+        label { display: block; text-align: left; margin-bottom: 5px; margin-top: 15px; font-weight: bold; color: #555; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; font-family: inherit; }
+        textarea { resize: vertical; height: 80px; }
+        button { width: 100%; padding: 12px; margin-top: 20px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #2980b9; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .header span { font-weight: bold; color: #2c3e50; }
+        a.logout { color: #e74c3c; text-decoration: none; font-size: 14px; }
+        a.logout:hover { text-decoration: underline; }
+        .admin-link { display: block; margin-top: 20px; text-align: center; color: #7f8c8d; text-decoration: none; font-size: 14px; }
+        .admin-link:hover { text-decoration: underline; }
+    </style>
 </head>
-<body class="bg-light">
-    <div class="container py-4" style="max-width: 500px;">
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <!-- Ссылка на вход в админ-панель -->
-                <div class="text-end mb-2">
-                    <a href="/login" class="text-decoration-none text-muted small">Вход для администратора →</a>
-                </div>
+<body>
+    {% if not logged_in %}
+    <div class="card">
+        <h2>Патрульная служба</h2>
+        <h3 style="text-align: center; color: #555; margin-top: -10px;">Вход для патрульного</h3>
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        <form action="/patrol/login" method="POST">
+            <label for="patrol_name">Ваше ФИО</label>
+            <select id="patrol_name" name="patrol_name" required>
+                <option value="" disabled selected>Выберите ФИО из списка</option>
+                {% for name in patrol_names %}
+                <option value="{{ name }}">{{ name }}</option>
+                {% endfor %}
+            </select>
 
-                <h3 class="card-title text-center mb-4">Патрульная служба</h3>
+            <label for="pin">ПИН-код</label>
+            <input type="password" id="pin" name="pin" required>
 
-                {% if error %}
-                    <div class="alert alert-danger">Неверный ПИН-код или патрульный!</div>
-                {% endif %}
-                {% if success %}
-                    <div class="alert alert-success">Нарушение успешно зафиксировано!</div>
-                {% endif %}
-
-                {% if not patrol_name %}
-                    <!-- Форма входа для патрульного -->
-                    <form action="/patrol/login" method="post">
-                        <div class="mb-3">
-                            <label class="form-label">Выберите патрульного:</label>
-                            <select name="patrol_name" class="form-select form-select-lg" required>
-                                <option value="" selected disabled>-- Выберите из списка --</option>
-                                {% for name in patrols_list %}
-                                    <option value="{{ name }}">{{ name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Введите ПИН-код:</label>
-                            <input type="password" name="pin" class="form-control form-control-lg" placeholder="4 цифры" required autocomplete="off">
-                        </div>
-                        <button type="submit" class="btn btn-primary btn-lg w-100">Войти</button>
-                    </form>
-                {% else %}
-                    <!-- Форма фиксации нарушения -->
-                    <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-white rounded border">
-                        <span>Патрульный: <strong>{{ patrol_name }}</strong></span>
-                        <a href="/patrol/logout" class="btn btn-outline-secondary btn-sm">Сменить</a>
-                    </div>
-
-                    <form action="/add" method="post">
-                        <div class="mb-3">
-                            <label class="form-label">ФИО Студента:</label>
-                            <input type="text" name="student_name" class="form-control" placeholder="Иванов Иван" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Группа:</label>
-                            <input type="text" name="student_group" class="form-control" placeholder="Например: БПЛА-61" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Тип нарушения:</label>
-                            <select name="violation_type" class="form-select" required>
-                                <option value="" selected disabled>Выберите тип...</option>
-                                <option value="Опоздание">Опоздание</option>
-                                <option value="Внешний вид">Внешний вид / Форма</option>
-                                <option value="Дисциплина">Нарушение дисциплины</option>
-                                <option value="Курение">Курение в неположенном месте</option>
-                                <option value="Другое">Другое</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Комментарий (необязательно):</label>
-                            <textarea name="comment" class="form-control" rows="2"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-danger btn-lg w-100">Зафиксировать нарушение</button>
-                    </form>
-                {% endif %}
-            </div>
-        </div>
+            <button type="submit">Войти</button>
+        </form>
+        <a href="/login" class="admin-link">Вход для администратора</a>
     </div>
+    {% else %}
+    <div class="card">
+        <div class="header">
+            <span>Фиксация нарушения</span>
+            <span>Патрульный: {{ patrol_name }}</span>
+            <a href="/patrol/logout" class="logout">Выйти</a>
+        </div>
+        {% if success %}
+        <div class="success">Нарушение успешно сохранено.</div>
+        {% endif %}
+        <form action="/add" method="POST">
+            <label for="student_group">Группа нарушителя</label>
+            <input type="text" id="student_group" name="student_group" required>
+
+            <label for="student_name">ФИО студента-нарушителя</label>
+            <input type="text" id="student_name" name="student_name" required>
+
+            <label for="violation_type">Тип нарушения</label>
+            <select id="violation_type" name="violation_type" required>
+                {% for v_type in violation_types %}
+                <option value="{{ v_type }}">{{ v_type }}</option>
+                {% endfor %}
+            </select>
+
+            <label for="comment">Детали / Комментарий</label>
+            <textarea id="comment" name="comment"></textarea>
+
+            <button type="submit">Сохранить нарушение</button>
+        </form>
+    </div>
+    {% endif %}
 </body>
 </html>
