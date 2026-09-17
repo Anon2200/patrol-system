@@ -1,6 +1,7 @@
 import csv
 import io
 import sqlite3
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -85,7 +86,10 @@ def is_admin(request: Request) -> bool:
     return request.cookies.get(COOKIE_AUTH_ROLE) == "admin"
 
 def get_patrol_name(request: Request) -> Optional[str]:
-    name = request.cookies.get(COOKIE_PATROL_NAME)
+    raw_name = request.cookies.get(COOKIE_PATROL_NAME)
+    if not raw_name:
+        return None
+    name = urllib.parse.unquote(raw_name)
     if name in PATROL_NAMES:
         return name
     return None
@@ -137,7 +141,7 @@ def patrol_login(
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(
         key=COOKIE_PATROL_NAME,
-        value=patrol_name,
+        value=urllib.parse.quote(patrol_name),
         max_age=COOKIE_MAX_AGE_30_DAYS,
         httponly=True,
         samesite="lax",
