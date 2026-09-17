@@ -10,6 +10,11 @@
     <div class="container py-4" style="max-width: 500px;">
         <div class="card shadow-sm">
             <div class="card-body">
+                <!-- Ссылка на вход в панель администратора -->
+                <div class="text-end mb-2">
+                    <a href="/login" class="text-decoration-none text-muted small">Вход для администратора →</a>
+                </div>
+
                 <h3 class="card-title text-center mb-4">Патрульная служба</h3>
 
                 {% if error %}
@@ -20,7 +25,7 @@
                 {% endif %}
 
                 {% if not patrol_name %}
-                    <!-- Форма входа -->
+                    <!-- Форма входа патрульного -->
                     <form action="/patrol/login" method="post">
                         <div class="mb-3">
                             <label class="form-label">Выберите патрульного:</label>
@@ -38,7 +43,7 @@
                         <button type="submit" class="btn btn-primary btn-lg w-100">Войти</button>
                     </form>
                 {% else %}
-                    <!-- Форма фиксации -->
+                    <!-- Форма фиксации нарушения -->
                     <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-white rounded border">
                         <span>Патрульный: <strong>{{ patrol_name }}</strong></span>
                         <a href="/patrol/logout" class="btn btn-outline-secondary btn-sm">Сменить</a>
