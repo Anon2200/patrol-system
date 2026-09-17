@@ -62,7 +62,10 @@ def is_admin(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, success: str = None, error: str = None):
-    patrol_name = request.cookies.get("patrol_name")
+    raw_patrol_name = request.cookies.get("patrol_name")
+    # Безопасное раскодирование имени из куки
+    patrol_name = urllib.parse.unquote(raw_patrol_name) if raw_patrol_name else None
+    
     patrols_list = sorted(list(PATROLS.values()))
     return templates.TemplateResponse("patrol.html", {
         "request": request, 
@@ -76,7 +79,9 @@ async def read_root(request: Request, success: str = None, error: str = None):
 async def patrol_login(patrol_name: str = Form(...), pin: str = Form(...)):
     if pin in PATROLS and PATROLS[pin] == patrol_name:
         response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-        response.set_cookie(key="patrol_name", value=patrol_name, max_age=86400*30, httponly=True)
+        # Кодируем кириллицу в URL-формат (percent-encoding) для безопасной записи в Set-Cookie
+        encoded_name = urllib.parse.quote(patrol_name)
+        response.set_cookie(key="patrol_name", value=encoded_name, max_age=86400*30, httponly=True)
         return response
     return RedirectResponse(url="/?error=1", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -95,11 +100,13 @@ async def add_violation(
     comment: str = Form(""),
     db: sqlite3.Connection = Depends(get_db)
 ):
-    patrol_name = request.cookies.get("patrol_name")
-    if not patrol_name:
+    raw_patrol_name = request.cookies.get("patrol_name")
+    if not raw_patrol_name:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
-    # Время по Москве (Europe/Moscow)
+    patrol_name = urllib.parse.unquote(raw_patrol_name)
+
+    # Фиксация точного времени по Москве (Europe/Moscow)
     created_at = datetime.now(ZoneInfo("Europe/Moscow")).strftime("%Y-%m-%d %H:%M:%S")
     
     cursor = db.cursor()
@@ -193,7 +200,7 @@ async def export_csv(
     rows = cursor.fetchall()
 
     output = io.StringIO()
-    output.write('\ufeff')
+    output.write('\ufeff')  # BOM для правильного открытия UTF-8 в Excel
     writer = csv.writer(output, delimiter=';')
     writer.writerow(["ID", "Дата/Время (МСК)", "Патрульный", "Группа", "ФИО Студента", "Тип нарушения", "Комментарий"])
 
