@@ -4,32 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Вход администратора — Патрульная служба</title>
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f7f6; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
-        h2 { margin-top: 0; color: #333; }
-        .error { color: #e74c3c; background: #fdeaea; padding: 10px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; }
-        label { display: block; text-align: left; margin-bottom: 5px; font-weight: bold; color: #555; }
-        input[type="password"] { width: 100%; padding: 10px; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
-        button:hover { background: #2980b9; }
-        a { display: block; margin-top: 15px; color: #7f8c8d; text-decoration: none; font-size: 14px; }
-        a:hover { text-decoration: underline; }
-    </style>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-    <div class="card">
-        <h2>Админ-панель</h2>
-        <p>Патрульная служба колледжа</p>
-        {% if error %}
-        <div class="error">{{ error }}</div>
-        {% endif %}
-        <form action="/login" method="POST">
-            <label for="password">Пароль администратора</label>
-            <input type="password" id="password" name="password" required>
-            <button type="submit">Войти</button>
-        </form>
-        <a href="/">Вернуться на страницу патрульного</a>
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="login-logo">🔑</div>
+            <h1 class="login-title">Админ-панель</h1>
+            <p class="login-subtitle">Патрульная служба колледжа</p>
+
+            {% if error %}
+            <div class="alert alert-error">⚠️ {{ error }}</div>
+            {% endif %}
+
+            <form action="/login" method="POST">
+                <div class="form-group">
+                    <label class="form-label" for="password">🔐 Пароль администратора</label>
+                    <input class="form-input" type="password" id="password" name="password" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block">Войти</button>
+            </form>
+
+            <div class="login-footer">
+                <a href="/">← Вернуться на страницу патрульного</a>
+            </div>
+        </div>
     </div>
 </body>
 </html>
