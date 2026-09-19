@@ -10,6 +10,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 # ---------------------------------------------------------------------------
@@ -23,7 +24,7 @@ PATROL_NAMES = [
     "Соколов",
     "Ипполитов",
     "Старовойтов",
-    "Алёшин",
+    "Алешин",
     "Иванов",
     "Нилов",
     "Дрейден",
@@ -44,11 +45,24 @@ VIOLATION_TYPES = [
     "Другое",
 ]
 
+# Цвета бейджей для типов нарушений
+VIOLATION_COLORS = {
+    "Опоздание": "orange",
+    "Отсутствие формы / бейджа": "yellow",
+    "Нарушение дисциплины": "red",
+    "Курение в неположенном месте": "darkred",
+    "Другое": "gray",
+}
+
 COOKIE_PATROL_NAME = "patrol_name"
 COOKIE_AUTH_ROLE = "auth_role"
 COOKIE_MAX_AGE_30_DAYS = 60 * 60 * 24 * 30
 
 app = FastAPI(title="Патрульная служба колледжа")
+
+# Подключаем статику (CSS)
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # ---------------------------------------------------------------------------
@@ -95,6 +109,9 @@ def get_patrol_name(request: Request) -> Optional[str]:
     if name in PATROL_NAMES:
         return name
     return None
+
+def get_badge_class(violation_type: str) -> str:
+    return f"badge badge-{VIOLATION_COLORS.get(violation_type, 'gray')}"
 
 def build_violations_query(
     student_name: Optional[str],
@@ -280,6 +297,7 @@ def admin_panel(
             "type_filter": violation_type or "",
             "date_from_filter": date_from or "",
             "date_to_filter": date_to or "",
+            "get_badge_class": get_badge_class,
         },
     )
 
@@ -311,7 +329,7 @@ def admin_export(
     conn.close()
 
     buffer = io.StringIO()
-    buffer.write("\ufeff")  # UTF-8 BOM для корректного открытия в Excel
+    buffer.write("\ufeff")
     writer = csv.writer(buffer, delimiter=";")
     writer.writerow(
         [
