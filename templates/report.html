@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отчёт за неделю — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="page-header no-print">
+            <div class="page-title">
+                <span>🖨</span>
+                <span>Отчёт за неделю</span>
+            </div>
+            <div class="nav-links">
+                <button class="btn btn-primary" onclick="window.print()">🖨 Печать</button>
+                <a href="/admin" class="nav-link nav-link-primary">← Назад</a>
+            </div>
+        </div>
+
+        <div class="card report-sheet">
+            <h2 style="text-align: center;">ОТЧЁТ<br>о нарушениях студентов</h2>
+            <p class="report-meta" style="text-align: center;">Период: с {{ period_start }} по {{ period_end }} · Сформирован: {{ generated }}</p>
+
+            <p style="margin: 20px 0 8px;"><strong>Всего нарушений: {{ total }}</strong></p>
+            <p style="margin-bottom: 20px;">
+                По типам:
+                {% for t, c in by_type %}
+                <span class="{{ get_badge_class(t) }}" style="margin-right: 6px;">{{ t }}: {{ c }}</span>
+                {% endfor %}
+            </p>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>№</th>
+                            <th>Дата и время</th>
+                            <th>Патрульный</th>
+                            <th>Студент</th>
+                            <th>Группа</th>
+                            <th>Тип нарушения</th>
+                            <th>Комментарий</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in rows %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ v.created_at }}</td>
+                            <td>{{ v.patrol_name }}</td>
+                            <td>{{ v.student_name }}</td>
+                            <td>{{ v.student_group }}</td>
+                            <td>{{ v.violation_type }}</td>
+                            <td>{{ v.comment or "—" }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 30px;">За прошедшую неделю нарушений не зафиксировано.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="report-signatures">
+                <span>Руководитель: ____________________</span>
+                <span>Начальник патруля: ____________________</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
