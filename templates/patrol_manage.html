@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Состав патруля — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="page-header">
+            <div class="page-title">
+                <span>👥</span>
+                <span>Состав патруля</span>
+            </div>
+            <div class="nav-links">
+                <a href="/admin" class="nav-link nav-link-primary">← Назад в админ-панель</a>
+                <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">🌙</button>
+                <a href="/admin/logout" class="nav-link nav-link-danger">Выйти</a>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 16px;">➕ Добавить патрульного</h3>
+            <form action="/admin/patrol/add" method="POST" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <input class="form-input" style="flex: 1; min-width: 220px;" type="text" name="name" placeholder="Фамилия (например, Петров)" required>
+                <button type="submit" class="btn btn-primary">Добавить</button>
+            </form>
+        </div>
+
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-title">Текущий состав ({{ names|length }})</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>👤 ФИО</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for name in names %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><strong>{{ name }}</strong></td>
+                            <td>
+                                <form action="/admin/patrol/delete" method="POST" onsubmit="return confirm('Убрать {{ name }} из состава патруля?');">
+                                    <input type="hidden" name="name" value="{{ name }}">
+                                    <button type="submit" class="btn btn-danger btn-sm">🗑 Убрать</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">📭</div>
+                                    <div class="empty-state-text">Список пуст — добавьте патрульных</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const toastMsg = {{ request.query_params.get('toast') | tojson }};
+        if (toastMsg) { showToast(toastMsg); }
+    </script>
+</body>
+</html>
