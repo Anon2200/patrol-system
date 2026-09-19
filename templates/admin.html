@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Админ-панель — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
 </head>
 <body>
     <div class="container">
@@ -15,6 +17,9 @@
             </div>
             <div class="nav-links">
                 <a href="/stats" class="nav-link nav-link-primary">📊 Статистика</a>
+                <a href="/admin/report" class="nav-link nav-link-primary">🖨 Отчёт</a>
+                <a href="/admin/patrol" class="nav-link nav-link-primary">👥 Патрульные</a>
+                <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">🌙</button>
                 <a href="/admin/logout" class="nav-link nav-link-danger">Выйти</a>
             </div>
         </div>
@@ -51,19 +56,19 @@
 
         <div class="table-card">
             <div class="table-header">
-                <div class="table-title">📋 Список нарушений <span style="color:#6b7280; font-weight:500;">({{ violations|length }})</span></div>
+                <div class="table-title">📋 Список нарушений <span style="color: var(--muted); font-weight: 500;">(всего: {{ total }})</span></div>
                 <a href="/admin/export?student_name={{ name_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}" class="btn btn-success">📥 Экспорт в Excel</a>
             </div>
             <div class="table-wrapper">
                 <table>
                     <thead>
                         <tr>
-                            <th>#</th>
-                            <th>🕐 Дата и время</th>
-                            <th>🛡️ Патрульный</th>
-                            <th>👤 Студент</th>
-                            <th>🏫 Группа</th>
-                            <th>⚠️ Тип нарушения</th>
+                            <th><a class="th-link" href="{{ sort_urls['id'] }}"># {% if sort == 'id' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th><a class="th-link" href="{{ sort_urls['created_at'] }}">🕐 Дата {% if sort == 'created_at' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th><a class="th-link" href="{{ sort_urls['patrol_name'] }}">🛡️ Патрульный {% if sort == 'patrol_name' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th><a class="th-link" href="{{ sort_urls['student_name'] }}">👤 Студент {% if sort == 'student_name' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th><a class="th-link" href="{{ sort_urls['student_group'] }}">🏫 Группа {% if sort == 'student_group' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th><a class="th-link" href="{{ sort_urls['violation_type'] }}">⚠️ Тип {% if sort == 'violation_type' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
                             <th>💬 Комментарий</th>
                             <th></th>
                         </tr>
@@ -74,13 +79,19 @@
                             <td><strong>{{ v.id }}</strong></td>
                             <td>{{ v.created_at }}</td>
                             <td>{{ v.patrol_name }}</td>
-                            <td>{{ v.student_name }}</td>
+                            <td>
+                                {{ v.student_name }}
+                                {% if v.student_name in repeat_names %}
+                                <span class="badge badge-darkred">⚠️ рецидивист</span>
+                                {% endif %}
+                            </td>
                             <td><span class="badge badge-blue">{{ v.student_group }}</span></td>
                             <td><span class="{{ get_badge_class(v.violation_type) }}">{{ v.violation_type }}</span></td>
                             <td>{{ v.comment or "—" }}</td>
-                            <td>
-                                <form action="/admin/delete/{{ v.id }}" method="POST" onsubmit="return confirm('Удалить запись?');">
-                                    <button type="submit" class="btn btn-danger">🗑</button>
+                            <td style="white-space: nowrap;">
+                                <a href="/admin/edit/{{ v.id }}" class="btn btn-secondary btn-sm" title="Редактировать">✏️</a>
+                                <form style="display: inline;" action="/admin/delete/{{ v.id }}" method="POST" onsubmit="return confirm('Удалить запись?');">
+                                    <button type="submit" class="btn btn-danger btn-sm" title="Удалить">🗑</button>
                                 </form>
                             </td>
                         </tr>
@@ -97,7 +108,19 @@
                     </tbody>
                 </table>
             </div>
+            {% if pages > 1 %}
+            <div class="pagination">
+                {% if prev_url %}<a href="{{ prev_url }}" class="btn btn-secondary">← Назад</a>{% endif %}
+                <span class="page-info">Стр. {{ page }} из {{ pages }}</span>
+                {% if next_url %}<a href="{{ next_url }}" class="btn btn-secondary">Вперёд →</a>{% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
+
+    <script>
+        const toastMsg = {{ request.query_params.get('toast') | tojson }};
+        if (toastMsg) { showToast(toastMsg); }
+    </script>
 </body>
 </html>
