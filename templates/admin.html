@@ -4,114 +4,99 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Админ-панель — Патрульная служба</title>
-    <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        h2 { margin: 0; color: #333; }
-        .nav a { text-decoration: none; font-weight: bold; margin-left: 15px; }
-        a.stats-link { color: #27ae60; }
-        a.logout { color: #e74c3c; }
-        .filters { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; }
-        .filter-group { display: flex; flex-direction: column; }
-        .filter-group label { font-size: 13px; color: #555; margin-bottom: 5px; font-weight: bold; }
-        input, select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-width: 160px; }
-        button { padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #2980b9; }
-        a.reset { padding: 8px 16px; background: #95a5a6; color: white; border: none; border-radius: 4px; text-decoration: none; display: inline-block; }
-        a.reset:hover { background: #7f8c8d; }
-        .table-card { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow-x: auto; }
-        .table-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #eee; }
-        .export-btn { background: #27ae60; text-decoration: none; color: white; padding: 8px 16px; border-radius: 4px; font-size: 14px; }
-        .export-btn:hover { background: #219653; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 12px 20px; border-bottom: 1px solid #eee; }
-        th { background-color: #f8f9fa; color: #555; font-size: 13px; text-transform: uppercase; }
-        tr:hover { background-color: #f1f7fd; }
-        .delete-btn { background: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-        .delete-btn:hover { background: #c0392b; }
-        .empty-row { text-align: center; color: #7f8c8d; padding: 30px !important; }
-    </style>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h2>Патрульная служба — Админ-панель</h2>
-            <div class="nav">
-                <a href="/stats" class="stats-link">📊 Статистика</a>
-                <a href="/admin/logout" class="logout">Выйти</a>
+        <div class="page-header">
+            <div class="page-title">
+                <span>⚙️</span>
+                <span>Админ-панель</span>
+            </div>
+            <div class="nav-links">
+                <a href="/stats" class="nav-link nav-link-primary">📊 Статистика</a>
+                <a href="/admin/logout" class="nav-link nav-link-danger">Выйти</a>
             </div>
         </div>
 
-        <div class="filters">
-            <form action="/admin" method="GET" style="display: flex; gap: 15px; align-items: flex-end; flex-wrap: wrap; margin: 0;">
-                <div class="filter-group">
-                    <label for="student_name">ФИО студента</label>
-                    <input type="text" id="student_name" name="student_name" value="{{ name_filter }}" placeholder="Поиск по ФИО">
+        <div class="filters-card">
+            <form action="/admin" method="GET" class="filters-form">
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" for="student_name">👤 ФИО студента</label>
+                    <input class="form-input" type="text" id="student_name" name="student_name" value="{{ name_filter }}" placeholder="Поиск...">
                 </div>
-                <div class="filter-group">
-                    <label for="violation_type">Тип нарушения</label>
-                    <select id="violation_type" name="violation_type">
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" for="violation_type">⚠️ Тип нарушения</label>
+                    <select class="form-select" id="violation_type" name="violation_type">
                         <option value="">Все типы</option>
                         {% for v_type in violation_types %}
                         <option value="{{ v_type }}" {% if type_filter == v_type %}selected{% endif %}>{{ v_type }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="filter-group">
-                    <label for="date_from">Дата с</label>
-                    <input type="date" id="date_from" name="date_from" value="{{ date_from_filter }}">
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" for="date_from">📅 С даты</label>
+                    <input class="form-input" type="date" id="date_from" name="date_from" value="{{ date_from_filter }}">
                 </div>
-                <div class="filter-group">
-                    <label for="date_to">Дата по</label>
-                    <input type="date" id="date_to" name="date_to" value="{{ date_to_filter }}">
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" for="date_to">📅 По дату</label>
+                    <input class="form-input" type="date" id="date_to" name="date_to" value="{{ date_to_filter }}">
                 </div>
-                <button type="submit">Применить</button>
-                <a href="/admin" class="reset">Сбросить</a>
+                <div class="filters-actions">
+                    <button type="submit" class="btn btn-primary">🔍 Применить</button>
+                    <a href="/admin" class="btn btn-secondary">Сбросить</a>
+                </div>
             </form>
         </div>
 
         <div class="table-card">
             <div class="table-header">
-                <h3 style="margin:0;">Список нарушений ({{ violations|length }})</h3>
-                <a href="/admin/export?student_name={{ name_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}" class="export-btn">Экспорт в Excel (CSV)</a>
+                <div class="table-title">📋 Список нарушений <span style="color:#6b7280; font-weight:500;">({{ violations|length }})</span></div>
+                <a href="/admin/export?student_name={{ name_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}" class="btn btn-success">📥 Экспорт в Excel</a>
             </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Дата и время</th>
-                        <th>Патрульный</th>
-                        <th>Студент</th>
-                        <th>Группа</th>
-                        <th>Тип нарушения</th>
-                        <th>Комментарий</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for v in violations %}
-                    <tr>
-                        <td>{{ v.id }}</td>
-                        <td>{{ v.created_at }}</td>
-                        <td>{{ v.patrol_name }}</td>
-                        <td>{{ v.student_name }}</td>
-                        <td>{{ v.student_group }}</td>
-                        <td>{{ v.violation_type }}</td>
-                        <td>{{ v.comment or "—" }}</td>
-                        <td>
-                            <form action="/admin/delete/{{ v.id }}" method="POST" onsubmit="return confirm('Удалить запись?');">
-                                <button type="submit" class="delete-btn">Удалить</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="8" class="empty-row">Нарушения не найдены.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>🕐 Дата и время</th>
+                            <th>🛡️ Патрульный</th>
+                            <th>👤 Студент</th>
+                            <th>🏫 Группа</th>
+                            <th>⚠️ Тип нарушения</th>
+                            <th>💬 Комментарий</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in violations %}
+                        <tr>
+                            <td><strong>{{ v.id }}</strong></td>
+                            <td>{{ v.created_at }}</td>
+                            <td>{{ v.patrol_name }}</td>
+                            <td>{{ v.student_name }}</td>
+                            <td><span class="badge badge-blue">{{ v.student_group }}</span></td>
+                            <td><span class="{{ get_badge_class(v.violation_type) }}">{{ v.violation_type }}</span></td>
+                            <td>{{ v.comment or "—" }}</td>
+                            <td>
+                                <form action="/admin/delete/{{ v.id }}" method="POST" onsubmit="return confirm('Удалить запись?');">
+                                    <button type="submit" class="btn btn-danger">🗑</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">📭</div>
+                                    <div class="empty-state-text">Нарушения не найдены</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </body>
