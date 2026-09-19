@@ -1,8 +1,10 @@
 import csv
 import io
+import json
 import sqlite3
 import urllib.parse
-from datetime import datetime
+from collections import Counter
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -94,6 +96,40 @@ def get_patrol_name(request: Request) -> Optional[str]:
         return name
     return None
 
+def build_violations_query(
+    student_name: Optional[str],
+    violation_type: Optional[str],
+    date_from: Optional[str],
+    date_to: Optional[str],
+):
+    query = "SELECT * FROM violations WHERE 1=1"
+    params = []
+    if student_name:
+        query += " AND student_name LIKE ?"
+        params.append(f"%{student_name}%")
+    if violation_type:
+        query += " AND violation_type = ?"
+        params.append(violation_type)
+    if date_from:
+        query += " AND created_at >= ?"
+        params.append(f"{date_from} 00:00:00")
+    if date_to:
+        query += " AND created_at <= ?"
+        params.append(f"{date_to} 23:59:59")
+    query += " ORDER BY created_at DESC, id DESC"
+    return query, params
+
+def get_known_students():
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT student_name, student_group FROM violations ORDER BY id DESC"
+    ).fetchall()
+    conn.close()
+    known = {}
+    for row in rows:
+        known.setdefault(row["student_name"], row["student_group"])
+    return known
+
 # ---------------------------------------------------------------------------
 # Маршруты патрульного
 # ---------------------------------------------------------------------------
@@ -110,6 +146,7 @@ def patrol_home(request: Request, success: Optional[str] = None):
                 "error": None,
             },
         )
+    known = get_known_students()
     return templates.TemplateResponse(
         "patrol.html",
         {
@@ -118,6 +155,8 @@ def patrol_home(request: Request, success: Optional[str] = None):
             "patrol_name": patrol_name,
             "violation_types": VIOLATION_TYPES,
             "success": success,
+            "known_students": sorted(known.keys()),
+            "student_groups_json": json.dumps(known, ensure_ascii=False),
         },
     )
 
@@ -220,20 +259,13 @@ def admin_panel(
     request: Request,
     student_name: Optional[str] = None,
     violation_type: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ):
     if not is_admin(request):
         return RedirectResponse(url="/login", status_code=303)
 
-    query = "SELECT * FROM violations WHERE 1=1"
-    params = []
-    if student_name:
-        query += " AND student_name LIKE ?"
-        params.append(f"%{student_name}%")
-    if violation_type:
-        query += " AND violation_type = ?"
-        params.append(violation_type)
-    query += " ORDER BY created_at DESC, id DESC"
-
+    query, params = build_violations_query(student_name, violation_type, date_from, date_to)
     conn = get_db_connection()
     rows = conn.execute(query, params).fetchall()
     conn.close()
@@ -246,6 +278,8 @@ def admin_panel(
             "violation_types": VIOLATION_TYPES,
             "name_filter": student_name or "",
             "type_filter": violation_type or "",
+            "date_from_filter": date_from or "",
+            "date_to_filter": date_to or "",
         },
     )
 
@@ -265,20 +299,13 @@ def admin_export(
     request: Request,
     student_name: Optional[str] = None,
     violation_type: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ):
     if not is_admin(request):
         return RedirectResponse(url="/login", status_code=303)
 
-    query = "SELECT * FROM violations WHERE 1=1"
-    params = []
-    if student_name:
-        query += " AND student_name LIKE ?"
-        params.append(f"%{student_name}%")
-    if violation_type:
-        query += " AND violation_type = ?"
-        params.append(violation_type)
-    query += " ORDER BY created_at DESC, id DESC"
-
+    query, params = build_violations_query(student_name, violation_type, date_from, date_to)
     conn = get_db_connection()
     rows = conn.execute(query, params).fetchall()
     conn.close()
@@ -315,4 +342,70 @@ def admin_export(
         iter([buffer.getvalue()]),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+# ---------------------------------------------------------------------------
+# Статистика (дашборд)
+# ---------------------------------------------------------------------------
+@app.get("/stats", response_class=HTMLResponse)
+def stats_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM violations").fetchall()
+    conn.close()
+
+    now = datetime.now()
+    today_str = now.strftime("%Y-%m-%d")
+    week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    month_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+
+    days = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(13, -1, -1)]
+    by_day = {d: 0 for d in days}
+    by_type = Counter()
+    by_group = Counter()
+    by_patrol = Counter()
+
+    total = len(rows)
+    today_count = 0
+    week_count = 0
+    month_count = 0
+
+    for row in rows:
+        day = row["created_at"][:10]
+        if day == today_str:
+            today_count += 1
+        if day >= week_ago:
+            week_count += 1
+        if day >= month_ago:
+            month_count += 1
+        if day in by_day:
+            by_day[day] += 1
+        by_type[row["violation_type"]] += 1
+        by_group[row["student_group"]] += 1
+        by_patrol[row["patrol_name"]] += 1
+
+    top_groups = by_group.most_common(5)
+
+    chart_data = {
+        "days_labels": [d[5:] for d in days],
+        "days_counts": [by_day[d] for d in days],
+        "type_labels": list(by_type.keys()),
+        "type_counts": list(by_type.values()),
+        "group_labels": [g for g, _ in top_groups],
+        "group_counts": [c for _, c in top_groups],
+    }
+
+    return templates.TemplateResponse(
+        "stats.html",
+        {
+            "request": request,
+            "total": total,
+            "today_count": today_count,
+            "week_count": week_count,
+            "month_count": month_count,
+            "top_patrols": by_patrol.most_common(),
+            "chart_data_json": json.dumps(chart_data, ensure_ascii=False),
+        },
     )
