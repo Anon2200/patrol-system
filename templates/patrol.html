@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Патрульная служба колледжа</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
 </head>
 <body>
     {% if not logged_in %}
@@ -42,6 +44,7 @@
             </div>
         </div>
     </div>
+    <button class="theme-toggle floating" id="themeBtn" onclick="toggleTheme()">🌙</button>
     {% else %}
     <div class="container">
         <div class="page-header">
@@ -51,24 +54,27 @@
             </div>
             <div class="nav-links">
                 <span class="user-badge">👤 {{ patrol_name }}</span>
+                <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">🌙</button>
                 <a href="/patrol/logout" class="nav-link nav-link-danger">Выйти</a>
             </div>
         </div>
 
         <div class="card">
-            {% if success %}
-            <div class="alert alert-success">✅ Нарушение успешно сохранено.</div>
+            {% if dup_warning %}
+            <div class="alert alert-error">⚠️ {{ dup_warning }}</div>
             {% endif %}
 
             <form action="/add" method="POST">
+                <input type="hidden" name="dup_confirm" value="{% if dup_warning %}1{% else %}0{% endif %}">
+
                 <div class="form-group">
                     <label class="form-label" for="student_group">🏫 Группа нарушителя</label>
-                    <input class="form-input" type="text" id="student_group" name="student_group" required>
+                    <input class="form-input" type="text" id="student_group" name="student_group" value="{{ form_group }}" required>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label" for="student_name">👤 ФИО студента-нарушителя</label>
-                    <input class="form-input" type="text" id="student_name" name="student_name" list="students_list" autocomplete="off" required placeholder="Начните вводить фамилию...">
+                    <input class="form-input" type="text" id="student_name" name="student_name" list="students_list" autocomplete="off" required placeholder="Начните вводить фамилию..." value="{{ form_name }}">
                     <datalist id="students_list">
                         {% for s in known_students %}
                         <option value="{{ s }}"></option>
@@ -80,17 +86,17 @@
                     <label class="form-label" for="violation_type">⚠️ Тип нарушения</label>
                     <select class="form-select" id="violation_type" name="violation_type" required>
                         {% for v_type in violation_types %}
-                        <option value="{{ v_type }}">{{ v_type }}</option>
+                        <option value="{{ v_type }}" {% if form_type == v_type %}selected{% endif %}>{{ v_type }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label class="form-label" for="comment">💬 Детали / Комментарий</label>
-                    <textarea class="form-textarea" id="comment" name="comment" placeholder="Опишите нарушение подробнее (необязательно)"></textarea>
+                    <textarea class="form-textarea" id="comment" name="comment" placeholder="Опишите нарушение подробнее (необязательно)">{{ form_comment }}</textarea>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-block">💾 Сохранить нарушение</button>
+                <button type="submit" class="btn btn-primary btn-block">{% if dup_warning %}⚠️ Сохранить всё равно{% else %}💾 Сохранить нарушение{% endif %}</button>
             </form>
         </div>
     </div>
@@ -107,5 +113,10 @@
         });
     </script>
     {% endif %}
+
+    <script>
+        const toastMsg = {{ request.query_params.get('toast') | tojson }};
+        if (toastMsg) { showToast(toastMsg); }
+    </script>
 </body>
 </html>
