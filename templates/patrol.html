@@ -62,7 +62,12 @@
             <input type="text" id="student_group" name="student_group" required>
 
             <label for="student_name">ФИО студента-нарушителя</label>
-            <input type="text" id="student_name" name="student_name" required>
+            <input type="text" id="student_name" name="student_name" list="students_list" autocomplete="off" required>
+            <datalist id="students_list">
+                {% for s in known_students %}
+                <option value="{{ s }}"></option>
+                {% endfor %}
+            </datalist>
 
             <label for="violation_type">Тип нарушения</label>
             <select id="violation_type" name="violation_type" required>
@@ -77,6 +82,17 @@
             <button type="submit">Сохранить нарушение</button>
         </form>
     </div>
+    <script>
+        const studentGroups = {{ student_groups_json | safe }};
+        const nameInput = document.getElementById('student_name');
+        const groupInput = document.getElementById('student_group');
+        nameInput.addEventListener('change', function () {
+            const group = studentGroups[nameInput.value.trim()];
+            if (group) {
+                groupInput.value = group;
+            }
+        });
+    </script>
     {% endif %}
 </body>
 </html>
