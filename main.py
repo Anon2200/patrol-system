@@ -27,7 +27,7 @@ DEFAULT_PATROL_NAMES = [
     "Соколов",
     "Ипполитов",
     "Старовойтов",
-    "Алёшин",
+    "Алешин",
     "Иванов",
     "Нилов",
     "Дрейден",
@@ -39,6 +39,7 @@ DEFAULT_PATROL_NAMES = [
 
 PATROL_PIN = "1234"
 ADMIN_PASSWORD = "1029384756"
+ADMIN_LABEL = "АДМИНИСТРАТОР"
 
 VIOLATION_TYPES = [
     "Опоздание",
@@ -524,6 +525,45 @@ def admin_panel(
             "next_url": next_url,
         },
     )
+
+@app.get("/admin/add", response_class=HTMLResponse)
+def admin_add_form(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    known = get_known_students()
+    return templates.TemplateResponse(
+        "admin_add.html",
+        {
+            "request": request,
+            "violation_types": VIOLATION_TYPES,
+            "known_students": sorted(known.keys()),
+            "student_groups_json": json.dumps(known, ensure_ascii=False),
+        },
+    )
+
+@app.post("/admin/add")
+def admin_add_save(
+    request: Request,
+    student_group: str = Form(...),
+    student_name: str = Form(...),
+    violation_type: str = Form(...),
+    comment: str = Form(""),
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db_connection()
+    conn.execute(
+        """
+        INSERT INTO violations
+            (patrol_name, student_name, student_group, violation_type, comment, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (ADMIN_LABEL, student_name.strip(), student_group.strip(), violation_type, comment.strip(), created_at),
+    )
+    conn.commit()
+    conn.close()
+    return toast_redirect("/admin", "Запись добавлена от имени АДМИНИСТРАТОРА ✓")
 
 @app.get("/admin/edit/{violation_id}", response_class=HTMLResponse)
 def admin_edit_form(request: Request, violation_id: int):
