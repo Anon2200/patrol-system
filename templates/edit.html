@@ -9,15 +9,12 @@
     <script src="/static/app.js"></script>
 </head>
 <body>
+    {% include "sidebar.html" %}
     <div class="container">
         <div class="page-header">
-            <div class="page-title">
-                <span>✏️</span>
-                <span>Редактирование записи №{{ v.id }}</span>
-            </div>
-            <div class="nav-links">
-                <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">🌙</button>
-                <a href="/admin" class="nav-link nav-link-primary">← Назад к списку</a>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>✏️</span><span>Редактирование записи №{{ v.id }}</span></div>
             </div>
         </div>
 
