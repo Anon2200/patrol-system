@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Патрульная служба колледжа</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="theme-color" content="#667eea">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/app.js"></script>
 </head>
@@ -59,12 +61,39 @@
             </div>
         </div>
 
+        <div class="card" style="margin-bottom: 20px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    {% if on_duty_today %}
+                    <div class="alert alert-success" style="margin: 0;">📅 Сегодня вы дежурите!{% if duty_colleagues %} С вами: {{ duty_colleagues | join(', ') }}{% endif %}</div>
+                    {% else %}
+                    <div style="color: var(--muted); font-size: 14px;">📅 Сегодня вы не в графике дежурств.</div>
+                    {% endif %}
+                    <div style="color: var(--muted); font-size: 13px; margin-top: 6px;">🕐 За 30 дней: {{ my_shifts_count }} смен, {{ my_hours }} ч</div>
+                </div>
+                <div>
+                    {% if open_shift %}
+                    <span class="badge badge-green" style="margin-right: 8px;">🟢 Смена с {{ open_shift }}</span>
+                    <form style="display: inline;" action="/shift/end" method="POST">
+                        <button type="submit" class="btn btn-danger">⏹ Завершить смену</button>
+                    </form>
+                    {% else %}
+                    <form style="display: inline;" action="/shift/start" method="POST">
+                        <button type="submit" class="btn btn-success">▶️ Начать смену</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
         <div class="card">
+            <div id="offlineBadge" class="alert alert-error" style="display: none;">📴 Нет сети: <span id="offlineCount">0</span> зап. ждут отправки. Они уйдут автоматически.</div>
+
             {% if dup_warning %}
             <div class="alert alert-error">⚠️ {{ dup_warning }}</div>
             {% endif %}
 
-            <form action="/add" method="POST">
+            <form action="/add" method="POST" id="violationForm">
                 <input type="hidden" name="dup_confirm" value="{% if dup_warning %}1{% else %}0{% endif %}">
 
                 <div class="form-group">
@@ -111,6 +140,66 @@
                 groupInput.value = group;
             }
         });
+
+        // ===== ОФЛАЙН-РЕЖИМ: очередь записей =====
+        const QUEUE_KEY = 'offline_violations';
+        const form = document.getElementById('violationForm');
+
+        function getQueue() { try { return JSON.parse(localStorage.getItem(QUEUE_KEY)) || []; } catch (e) { return []; } }
+        function saveQueue(q) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
+        function updateOfflineBadge() {
+            const q = getQueue();
+            const badge = document.getElementById('offlineBadge');
+            if (!badge) return;
+            document.getElementById('offlineCount').textContent = q.length;
+            badge.style.display = q.length ? 'block' : 'none';
+        }
+
+        form.addEventListener('submit', function (e) {
+            if (navigator.onLine) return;
+            e.preventDefault();
+            const q = getQueue();
+            q.push({
+                student_group: document.getElementById('student_group').value,
+                student_name: document.getElementById('student_name').value,
+                violation_type: document.getElementById('violation_type').value,
+                comment: document.getElementById('comment').value
+            });
+            saveQueue(q);
+            form.reset();
+            showToast('Сохранено офлайн. Отправится при появлении сети.');
+            updateOfflineBadge();
+        });
+
+        async function flushQueue() {
+            const q = getQueue();
+            if (!q.length || !navigator.onLine) return;
+            const left = [];
+            let sent = 0;
+            for (const rec of q) {
+                try {
+                    const fd = new FormData();
+                    fd.append('student_group', rec.student_group);
+                    fd.append('student_name', rec.student_name);
+                    fd.append('violation_type', rec.violation_type);
+                    fd.append('comment', rec.comment || '');
+                    const resp = await fetch('/add', { method: 'POST', body: fd });
+                    if (resp.ok && resp.redirected) { sent++; } else { left.push(rec); }
+                } catch (err) { left.push(rec); }
+            }
+            saveQueue(left);
+            if (sent) showToast('Отправлено офлайн-записей: ' + sent);
+            if (left.length) showToast('Не отправлено: ' + left.length + ' (возможно, дубли).', 'error');
+            updateOfflineBadge();
+        }
+
+        window.addEventListener('online', flushQueue);
+        window.addEventListener('load', function () { updateOfflineBadge(); flushQueue(); });
+
+        // Регистрация service worker (офлайн-оболочка + установка как приложение)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js'); });
+        }
     </script>
     {% endif %}
 
