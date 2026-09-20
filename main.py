@@ -7,10 +7,10 @@ import urllib.parse
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -98,6 +98,27 @@ def init_db() -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS duty_schedule (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            duty_date TEXT NOT NULL,
+            patrol_name TEXT NOT NULL,
+            UNIQUE(duty_date, patrol_name)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS shifts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patrol_name TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            ended_at TEXT,
+            duration_minutes INTEGER
+        )
+        """
+    )
     count = conn.execute("SELECT COUNT(*) FROM patrol_members").fetchone()[0]
     if count == 0:
         for name in DEFAULT_PATROL_NAMES:
@@ -108,6 +129,17 @@ def init_db() -> None:
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+
+# ---------------------------------------------------------------------------
+# PWA: service worker и manifest (офлайн-режим)
+# ---------------------------------------------------------------------------
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse(BASE_DIR / "static" / "sw.js", media_type="application/javascript")
+
+@app.get("/manifest.webmanifest")
+async def manifest():
+    return FileResponse(BASE_DIR / "static" / "manifest.webmanifest", media_type="application/manifest+json")
 
 # ---------------------------------------------------------------------------
 # Страницы ошибок (404 / 500)
@@ -193,6 +225,13 @@ def build_violations_query(student_name, violation_type, date_from, date_to):
 def toast_redirect(url: str, message: str) -> RedirectResponse:
     return RedirectResponse(url + "?toast=" + urllib.parse.quote(message), status_code=303)
 
+def format_duration(minutes: int) -> str:
+    h = minutes // 60
+    m = minutes % 60
+    if h:
+        return f"{h} ч {m} мин"
+    return f"{m} мин"
+
 # ---------------------------------------------------------------------------
 # Маршруты патрульного
 # ---------------------------------------------------------------------------
@@ -202,14 +241,22 @@ def patrol_home(request: Request):
     if not patrol_name:
         return templates.TemplateResponse(
             "patrol.html",
-            {
-                "request": request,
-                "logged_in": False,
-                "patrol_names": get_patrol_names(),
-                "error": None,
-            },
+            {"request": request, "logged_in": False, "patrol_names": get_patrol_names(), "error": None},
         )
     known = get_known_students()
+    today = datetime.now().strftime("%Y-%m-%d")
+    month_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+    conn = get_db_connection()
+    duty_rows = conn.execute("SELECT patrol_name FROM duty_schedule WHERE duty_date = ?", (today,)).fetchall()
+    open_shift = conn.execute(
+        "SELECT started_at FROM shifts WHERE patrol_name = ? AND ended_at IS NULL", (patrol_name,)
+    ).fetchone()
+    my_shifts = conn.execute(
+        "SELECT duration_minutes FROM shifts WHERE patrol_name = ? AND ended_at IS NOT NULL AND started_at >= ?",
+        (patrol_name, month_ago + " 00:00:00"),
+    ).fetchall()
+    conn.close()
+    duty_names = [r["patrol_name"] for r in duty_rows]
     return templates.TemplateResponse(
         "patrol.html",
         {
@@ -219,6 +266,11 @@ def patrol_home(request: Request):
             "violation_types": VIOLATION_TYPES,
             "known_students": sorted(known.keys()),
             "student_groups_json": json.dumps(known, ensure_ascii=False),
+            "on_duty_today": patrol_name in duty_names,
+            "duty_colleagues": [n for n in duty_names if n != patrol_name],
+            "open_shift": open_shift["started_at"] if open_shift else None,
+            "my_shifts_count": len(my_shifts),
+            "my_hours": round(sum(r["duration_minutes"] or 0 for r in my_shifts) / 60, 1),
         },
     )
 
@@ -255,6 +307,49 @@ def patrol_logout():
     response = RedirectResponse(url="/", status_code=303)
     response.delete_cookie(COOKIE_PATROL_NAME)
     return response
+
+@app.post("/shift/start")
+def shift_start(request: Request):
+    patrol_name = get_patrol_name(request)
+    if not patrol_name:
+        return RedirectResponse(url="/", status_code=303)
+    conn = get_db_connection()
+    open_row = conn.execute(
+        "SELECT id FROM shifts WHERE patrol_name = ? AND ended_at IS NULL", (patrol_name,)
+    ).fetchone()
+    if open_row:
+        conn.close()
+        return toast_redirect("/", "Смена уже начата")
+    conn.execute(
+        "INSERT INTO shifts (patrol_name, started_at) VALUES (?, ?)",
+        (patrol_name, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+    )
+    conn.commit()
+    conn.close()
+    return toast_redirect("/", "Смена начата ✓")
+
+@app.post("/shift/end")
+def shift_end(request: Request):
+    patrol_name = get_patrol_name(request)
+    if not patrol_name:
+        return RedirectResponse(url="/", status_code=303)
+    conn = get_db_connection()
+    open_row = conn.execute(
+        "SELECT * FROM shifts WHERE patrol_name = ? AND ended_at IS NULL", (patrol_name,)
+    ).fetchone()
+    if not open_row:
+        conn.close()
+        return toast_redirect("/", "Нет активной смены")
+    now = datetime.now()
+    started = datetime.strptime(open_row["started_at"], "%Y-%m-%d %H:%M:%S")
+    minutes = int((now - started).total_seconds() // 60)
+    conn.execute(
+        "UPDATE shifts SET ended_at = ?, duration_minutes = ? WHERE id = ?",
+        (now.strftime("%Y-%m-%d %H:%M:%S"), minutes, open_row["id"]),
+    )
+    conn.commit()
+    conn.close()
+    return toast_redirect("/", f"Смена завершена: {format_duration(minutes)}")
 
 @app.post("/add")
 def add_violation(
@@ -295,6 +390,11 @@ def add_violation(
                 "form_name": student_name_clean,
                 "form_type": violation_type,
                 "form_comment": comment.strip(),
+                "on_duty_today": False,
+                "duty_colleagues": [],
+                "open_shift": None,
+                "my_shifts_count": 0,
+                "my_hours": 0,
             },
         )
 
@@ -499,6 +599,85 @@ def admin_patrol_delete(request: Request, name: str = Form(...)):
     conn.commit()
     conn.close()
     return toast_redirect("/admin/patrol", "Патрульный удалён")
+
+@app.get("/admin/schedule", response_class=HTMLResponse)
+def admin_schedule_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    today = datetime.now().strftime("%Y-%m-%d")
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT * FROM duty_schedule WHERE duty_date >= ? ORDER BY duty_date, id", (today,)
+    ).fetchall()
+    conn.close()
+    schedule = {}
+    for r in rows:
+        schedule.setdefault(r["duty_date"], []).append(r["patrol_name"])
+    return templates.TemplateResponse(
+        "schedule.html",
+        {
+            "request": request,
+            "names": get_patrol_names(),
+            "schedule_list": sorted(schedule.items()),
+            "today": today,
+        },
+    )
+
+@app.post("/admin/schedule/add")
+def admin_schedule_add(request: Request, duty_date: str = Form(...), names: List[str] = Form(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    conn = get_db_connection()
+    for n in names:
+        conn.execute(
+            "INSERT OR IGNORE INTO duty_schedule (duty_date, patrol_name) VALUES (?, ?)",
+            (duty_date, n.strip()),
+        )
+    conn.commit()
+    conn.close()
+    return toast_redirect("/admin/schedule", "График сохранён ✓")
+
+@app.post("/admin/schedule/delete")
+def admin_schedule_delete(request: Request, duty_date: str = Form(...), name: str = Form(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    conn = get_db_connection()
+    conn.execute("DELETE FROM duty_schedule WHERE duty_date = ? AND patrol_name = ?", (duty_date, name))
+    conn.commit()
+    conn.close()
+    return toast_redirect("/admin/schedule", "Убран из графика")
+
+@app.get("/admin/shifts", response_class=HTMLResponse)
+def admin_shifts_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    month_ago = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d") + " 00:00:00"
+    conn = get_db_connection()
+    closed = conn.execute(
+        "SELECT * FROM shifts WHERE ended_at IS NOT NULL AND started_at >= ? ORDER BY started_at DESC",
+        (month_ago,),
+    ).fetchall()
+    recent = conn.execute("SELECT * FROM shifts ORDER BY started_at DESC LIMIT 50").fetchall()
+    conn.close()
+    summary = {}
+    for r in closed:
+        s = summary.setdefault(r["patrol_name"], {"count": 0, "minutes": 0})
+        s["count"] += 1
+        s["minutes"] += r["duration_minutes"] or 0
+    summary_list = sorted(
+        [(name, s["count"], format_duration(s["minutes"])) for name, s in summary.items()],
+        key=lambda x: x[1],
+        reverse=True,
+    )
+    return templates.TemplateResponse(
+        "shifts.html",
+        {
+            "request": request,
+            "summary": summary_list,
+            "recent": recent,
+            "format_duration": format_duration,
+        },
+    )
 
 @app.get("/admin/report", response_class=HTMLResponse)
 def admin_report(request: Request):
