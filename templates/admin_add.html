@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Добавить нарушение — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="page-header">
+            <div class="page-title">
+                <span>➕</span>
+                <span>Добавление нарушения</span>
+            </div>
+            <div class="nav-links">
+                <a href="/admin" class="nav-link nav-link-primary">← Админ-панель</a>
+                <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">🌙</button>
+                <a href="/admin/logout" class="nav-link nav-link-danger">Выйти</a>
+            </div>
+        </div>
+
+        <div class="card" style="max-width: 640px;">
+            <div class="alert alert-success">🔑 Запись будет сохранена с патрульным: <strong>АДМИНИСТРАТОР</strong></div>
+
+            <form action="/admin/add" method="POST">
+                <div class="form-group">
+                    <label class="form-label" for="student_group">🏫 Группа нарушителя</label>
+                    <input class="form-input" type="text" id="student_group" name="student_group" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="student_name">👤 ФИО студента-нарушителя</label>
+                    <input class="form-input" type="text" id="student_name" name="student_name" list="students_list" autocomplete="off" required placeholder="Начните вводить фамилию...">
+                    <datalist id="students_list">
+                        {% for s in known_students %}
+                        <option value="{{ s }}"></option>
+                        {% endfor %}
+                    </datalist>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="violation_type">⚠️ Тип нарушения</label>
+                    <select class="form-select" id="violation_type" name="violation_type" required>
+                        {% for v_type in violation_types %}
+                        <option value="{{ v_type }}">{{ v_type }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="comment">💬 Детали / Комментарий</label>
+                    <textarea class="form-textarea" id="comment" name="comment" placeholder="Опишите нарушение подробнее (необязательно)"></textarea>
+                </div>
+
+                <div class="filters-actions">
+                    <button type="submit" class="btn btn-primary">💾 Сохранить нарушение</button>
+                    <a href="/admin" class="btn btn-secondary">Отмена</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const studentGroups = {{ student_groups_json | safe }};
+        const nameInput = document.getElementById('student_name');
+        const groupInput = document.getElementById('student_group');
+        nameInput.addEventListener('change', function () {
+            const group = studentGroups[nameInput.value.trim()];
+            if (group) {
+                groupInput.value = group;
+            }
+        });
+    </script>
+</body>
+</html>
