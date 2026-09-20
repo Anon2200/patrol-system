@@ -1,4 +1,4 @@
-const CACHE = 'patrol-cache-v1';
+const CACHE = 'patrol-cache-v2';
 const ASSETS = [
     '/static/styles.css',
     '/static/app.js',
@@ -40,14 +40,16 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Статика: кэш → сеть
+    // Статика: СНАЧАЛА сеть (всегда свежие CSS/JS), при офлайне — кэш
     if (url.pathname.startsWith('/static/')) {
         event.respondWith(
-            caches.match(req).then((hit) => hit || fetch(req).then((resp) => {
-                const copy = resp.clone();
-                caches.open(CACHE).then((cache) => cache.put(req, copy));
-                return resp;
-            }))
+            fetch(req)
+                .then((resp) => {
+                    const copy = resp.clone();
+                    caches.open(CACHE).then((cache) => cache.put(req, copy));
+                    return resp;
+                })
+                .catch(() => caches.match(req))
         );
     }
 });
