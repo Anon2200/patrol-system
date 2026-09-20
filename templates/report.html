@@ -9,16 +9,14 @@
     <script src="/static/app.js"></script>
 </head>
 <body>
+    {% include "sidebar.html" %}
     <div class="container">
         <div class="page-header no-print">
-            <div class="page-title">
-                <span>🖨</span>
-                <span>Отчёт за неделю</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>🖨</span><span>Отчёт за неделю</span></div>
             </div>
-            <div class="nav-links">
-                <button class="btn btn-primary" onclick="window.print()">🖨 Печать</button>
-                <a href="/admin" class="nav-link nav-link-primary">← Назад</a>
-            </div>
+            <button class="btn btn-primary" onclick="window.print()">🖨 Печать</button>
         </div>
 
         <div class="card report-sheet">
@@ -67,7 +65,7 @@
             </div>
 
             <div class="report-signatures">
-                <span>Руководитель: ____________________</span>
+                <span>Руководитель патруля: ____________________</span>
                 <span>Начальник патруля: ____________________</span>
             </div>
         </div>
