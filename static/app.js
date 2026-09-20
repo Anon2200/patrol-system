@@ -11,8 +11,12 @@ function toggleTheme() {
 }
 
 function applyThemeIcon() {
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
     var btn = document.getElementById('themeBtn');
-    if (btn) btn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+    if (btn) btn.textContent = dark ? '☀️' : '🌙';
+    document.querySelectorAll('.theme-icon').forEach(function (el) {
+        el.textContent = dark ? '☀️' : '🌙';
+    });
 }
 
 function showToast(msg, type) {
@@ -27,4 +31,30 @@ function showToast(msg, type) {
     }, 3500);
 }
 
+// ===== Боковое меню =====
+function openSidebar() {
+    var sb = document.getElementById('sidebar');
+    var ov = document.getElementById('sidebarOverlay');
+    if (!sb || !ov) return;
+    sb.classList.add('open');
+    ov.classList.add('show');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSidebar() {
+    var sb = document.getElementById('sidebar');
+    var ov = document.getElementById('sidebarOverlay');
+    if (!sb || !ov) return;
+    sb.classList.remove('open');
+    ov.classList.remove('show');
+    document.body.style.overflow = '';
+}
+
+function toggleMenuGroup(btn) {
+    btn.parentElement.classList.toggle('open');
+}
+
 document.addEventListener('DOMContentLoaded', applyThemeIcon);
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeSidebar();
+});
