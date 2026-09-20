@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Учёт смен — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="page-header">
+            <div class="page-title">
+                <span>🕐</span>
+                <span>Учёт смен патруля</span>
+            </div>
+            <div class="nav-links">
+                <a href="/admin" class="nav-link nav-link-primary">← Админ-панель</a>
+                <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">🌙</button>
+                <a href="/admin/logout" class="nav-link nav-link-danger">Выйти</a>
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom: 20px;">
+            <div class="table-header">
+                <div class="table-title">🏆 Итоги за 30 дней</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>👤 Патрульный</th>
+                            <th>📋 Смен</th>
+                            <th>⏱ Всего времени</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for name, count, duration in summary %}
+                        <tr>
+                            <td><strong>{{ name }}</strong></td>
+                            <td><span class="badge badge-blue">{{ count }}</span></td>
+                            <td><span class="badge badge-green">{{ duration }}</span></td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">📭</div>
+                                    <div class="empty-state-text">Завершённых смен пока нет</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-title">Последние смены (до 50)</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>👤 Патрульный</th>
+                            <th>▶️ Начало</th>
+                            <th>⏹ Окончание</th>
+                            <th>⏱ Длительность</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in recent %}
+                        <tr>
+                            <td><strong>{{ s.patrol_name }}</strong></td>
+                            <td>{{ s.started_at }}</td>
+                            <td>{{ s.ended_at or "—" }}</td>
+                            <td>
+                                {% if s.ended_at %}
+                                <span class="badge badge-green">{{ format_duration(s.duration_minutes or 0) }}</span>
+                                {% else %}
+                                <span class="badge badge-orange">идёт сейчас</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">📭</div>
+                                    <div class="empty-state-text">Смен пока нет</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
