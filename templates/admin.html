@@ -9,21 +9,12 @@
     <script src="/static/app.js"></script>
 </head>
 <body>
+    {% include "sidebar.html" %}
     <div class="container">
         <div class="page-header">
-            <div class="page-title">
-                <span>⚙️</span>
-                <span>Админ-панель</span>
-            </div>
-            <div class="nav-links">
-                <a href="/admin/add" class="nav-link nav-link-primary">➕ Добавить</a>
-                <a href="/stats" class="nav-link nav-link-primary">📊 Статистика</a>
-                <a href="/admin/schedule" class="nav-link nav-link-primary">📅 График</a>
-                <a href="/admin/shifts" class="nav-link nav-link-primary">🕐 Смены</a>
-                <a href="/admin/report" class="nav-link nav-link-primary">🖨 Отчёт</a>
-                <a href="/admin/patrol" class="nav-link nav-link-primary">👥 Патрульные</a>
-                <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">🌙</button>
-                <a href="/admin/logout" class="nav-link nav-link-danger">Выйти</a>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>⚙️</span><span>Админ-панель</span></div>
             </div>
         </div>
 
