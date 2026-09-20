@@ -16,6 +16,7 @@
                 <span>Админ-панель</span>
             </div>
             <div class="nav-links">
+                <a href="/admin/add" class="nav-link nav-link-primary">➕ Добавить</a>
                 <a href="/stats" class="nav-link nav-link-primary">📊 Статистика</a>
                 <a href="/admin/schedule" class="nav-link nav-link-primary">📅 График</a>
                 <a href="/admin/shifts" class="nav-link nav-link-primary">🕐 Смены</a>
@@ -80,7 +81,7 @@
                         <tr>
                             <td><strong>{{ v.id }}</strong></td>
                             <td>{{ v.created_at }}</td>
-                            <td>{{ v.patrol_name }}</td>
+                            <td>{% if v.patrol_name == "АДМИНИСТРАТОР" %}<span class="badge badge-darkred">🔑 АДМИНИСТРАТОР</span>{% else %}{{ v.patrol_name }}{% endif %}</td>
                             <td>
                                 {{ v.student_name }}
                                 {% if v.student_name in repeat_names %}
