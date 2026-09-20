@@ -1,4 +1,4 @@
-/* ===== СОВРЕМЕННЫЙ ДИЗАЙН + ТЁМНАЯ ТЕМА ===== */
+/* ===== СОВРЕМЕННЫЙ ДИЗАЙН + ТЁМНАЯ ТЕМА + БОКОВОЕ МЕНЮ ===== */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
@@ -153,7 +153,7 @@ body {
     transition: transform 0.2s ease;
 }
 .theme-toggle:hover { transform: scale(1.1); }
-.theme-toggle.floating { position: fixed; top: 16px; right: 16px; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.theme-toggle.floating { position: fixed; top: 16px; right: 16px; z-index: 100; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
 
 /* ===== TOAST-УВЕДОМЛЕНИЯ ===== */
 .toast {
@@ -174,7 +174,7 @@ body {
 .toast.show { opacity: 1; transform: translateY(0); }
 .toast.error { background: #ef4444; }
 
-/* ===== ВХОД ===== */
+/* ===== СТРАНИЦЫ ВХОДА ===== */
 .login-wrapper { display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
 .login-card {
     background: var(--card-bg);
@@ -194,7 +194,7 @@ body {
 
 .user-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: #dbeafe; color: #1e40af; border-radius: 20px; font-weight: 600; font-size: 14px; }
 
-/* ===== ТАБЛИЦА ===== */
+/* ===== ТАБЛИЦЫ ===== */
 .table-card { background: var(--card-bg); border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); overflow: hidden; animation: fadeInUp 0.5s ease-out; }
 .table-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 10px; }
 .table-title { font-size: 18px; font-weight: 700; color: var(--text); }
@@ -264,29 +264,6 @@ tbody tr:nth-child(even):hover { background: var(--row-hover); }
 .report-meta { color: var(--muted); font-size: 14px; margin: 6px 0; }
 .report-signatures { display: flex; justify-content: space-between; margin-top: 40px; gap: 20px; flex-wrap: wrap; font-size: 14px; }
 
-/* ===== ПЕЧАТЬ ===== */
-@media print {
-    body { background: white !important; color: black !important; }
-    .no-print { display: none !important; }
-    .card, .table-card { box-shadow: none !important; border: 1px solid #ddd; }
-    th { background: #eee !important; color: #333 !important; }
-    td, th { color: black !important; }
-    .badge { border: 1px solid #999; background: white !important; color: black !important; }
-}
-
-/* ===== АДАПТИВНОСТЬ ===== */
-@media (max-width: 768px) {
-    .container { padding: 12px; }
-    .page-header { flex-direction: column; align-items: flex-start; padding: 16px; }
-    .nav-links { width: 100%; }
-    .nav-link { flex: 1; text-align: center; }
-    .login-card { padding: 28px 24px; }
-    .card { padding: 20px; }
-    .table-header { padding: 16px; }
-    th, td { padding: 10px 12px; font-size: 13px; }
-    .stat-number { font-size: 32px; }
-    .filters-form { grid-template-columns: 1fr; }
-}
 /* ===== БОКОВОЕ МЕНЮ (сайдбар) ===== */
 .menu-toggle-inline {
     border: none;
@@ -417,10 +394,28 @@ tbody tr:nth-child(even):hover { background: var(--row-hover); }
 
 .sidebar-footer { padding: 12px; border-top: 1px solid var(--border); }
 
-@media (max-width: 768px) {
-    .sidebar { width: 85%; }
+/* ===== ПЕЧАТЬ ===== */
+@media print {
+    body { background: white !important; color: black !important; }
+    .no-print { display: none !important; }
+    .sidebar, .sidebar-overlay, .menu-toggle-inline { display: none !important; }
+    .card, .table-card { box-shadow: none !important; border: 1px solid #ddd; }
+    th { background: #eee !important; color: #333 !important; }
+    td, th { color: black !important; }
+    .badge { border: 1px solid #999; background: white !important; color: black !important; }
 }
 
-@media print {
-    .sidebar, .sidebar-overlay, .menu-toggle-inline { display: none !important; }
+/* ===== АДАПТИВНОСТЬ ===== */
+@media (max-width: 768px) {
+    .container { padding: 12px; }
+    .page-header { flex-direction: column; align-items: flex-start; padding: 16px; }
+    .nav-links { width: 100%; }
+    .nav-link { flex: 1; text-align: center; }
+    .login-card { padding: 28px 24px; }
+    .card { padding: 20px; }
+    .table-header { padding: 16px; }
+    th, td { padding: 10px 12px; font-size: 13px; }
+    .stat-number { font-size: 32px; }
+    .filters-form { grid-template-columns: 1fr; }
+    .sidebar { width: 85%; }
 }
