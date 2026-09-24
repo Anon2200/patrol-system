@@ -25,6 +25,10 @@
                     <input class="form-input" type="text" id="student_name" name="student_name" value="{{ name_filter }}" placeholder="Поиск...">
                 </div>
                 <div class="form-group" style="margin: 0;">
+                    <label class="form-label" for="group">🏫 Группа</label>
+                    <input class="form-input" type="text" id="group" name="group" value="{{ group_filter }}" placeholder="Напр. 205">
+                </div>
+                <div class="form-group" style="margin: 0;">
                     <label class="form-label" for="violation_type">⚠️ Тип нарушения</label>
                     <select class="form-select" id="violation_type" name="violation_type">
                         <option value="">Все типы</option>
@@ -51,7 +55,13 @@
         <div class="table-card">
             <div class="table-header">
                 <div class="table-title">📋 Список нарушений <span style="color: var(--muted); font-weight: 500;">(всего: {{ total }})</span></div>
-                <a href="/admin/export?student_name={{ name_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}" class="btn btn-success">📥 Экспорт в Excel</a>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                    <form action="/admin/restore" method="POST" enctype="multipart/form-data" style="display: flex; gap: 8px; align-items: center;" onsubmit="return confirm('Восстановить записи из CSV-файла? Существующие дубликаты будут пропущены.');">
+                        <input type="file" name="file" accept=".csv" class="form-input" style="max-width: 240px; padding: 6px 10px;">
+                        <button type="submit" class="btn btn-secondary">♻️ Восстановить</button>
+                    </form>
+                    <a href="/admin/export?student_name={{ name_filter }}&group={{ group_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}" class="btn btn-success">📥 Экспорт в Excel</a>
+                </div>
             </div>
             <div class="table-wrapper">
                 <table>
