@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Отчёт за неделю — Патрульная служба</title>
+    <title>Отчёт за период — Патрульная служба</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/app.js"></script>
@@ -14,14 +14,40 @@
         <div class="page-header no-print">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
-                <div class="page-title"><span>🖨</span><span>Отчёт за неделю</span></div>
+                <div class="page-title"><span>🖨</span><span>Отчёт за период</span></div>
             </div>
             <button class="btn btn-primary" onclick="window.print()">🖨 Печать</button>
         </div>
 
+        <div class="filters-card no-print">
+            <form action="/admin/report" method="GET" class="filters-form">
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" for="date_from">📅 С даты</label>
+                    <input class="form-input" type="date" id="date_from" name="date_from" value="{{ period_start }}">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" for="date_to">📅 По дату</label>
+                    <input class="form-input" type="date" id="date_to" name="date_to" value="{{ period_end }}">
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" for="department">🏛 Отделение</label>
+                    <select class="form-select" id="department" name="department">
+                        <option value="">Все отделения</option>
+                        {% for key, name in departments.items() %}
+                        <option value="{{ key }}" {% if dept_filter == key %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filters-actions">
+                    <button type="submit" class="btn btn-primary">🔍 Сформировать</button>
+                    <a href="/admin/report" class="btn btn-secondary">Сбросить</a>
+                </div>
+            </form>
+        </div>
+
         <div class="card report-sheet">
             <h2 style="text-align: center;">ОТЧЁТ<br>о нарушениях студентов</h2>
-            <p class="report-meta" style="text-align: center;">Период: с {{ period_start }} по {{ period_end }} · Сформирован: {{ generated }}</p>
+            <p class="report-meta" style="text-align: center;">Период: с {{ period_start }} по {{ period_end }}{% if dept_name %} · {{ dept_name }}{% endif %} · Сформирован: {{ generated }}</p>
 
             <p style="margin: 20px 0 8px;"><strong>Всего нарушений: {{ total }}</strong></p>
             <p style="margin-bottom: 20px;">
@@ -57,7 +83,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="7" style="text-align: center; padding: 30px;">За прошедшую неделю нарушений не зафиксировано.</td>
+                            <td colspan="7" style="text-align: center; padding: 30px;">За выбранный период нарушений не зафиксировано.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -65,8 +91,8 @@
             </div>
 
             <div class="report-signatures">
+                <span>Комендант: ____________________</span>
                 <span>Руководитель патруля: ____________________</span>
-                <span>Начальник патруля: ____________________</span>
             </div>
         </div>
     </div>
