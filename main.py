@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, File, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -27,7 +27,7 @@ DEFAULT_PATROL_NAMES = [
     "Соколов",
     "Ипполитов",
     "Старовойтов",
-    "Алешин",
+    "Алёшин",
     "Иванов",
     "Нилов",
     "Дрейден",
@@ -43,7 +43,7 @@ ADMIN_LABEL = "АДМИНИСТРАТОР"
 
 VIOLATION_TYPES = [
     "Опоздание",
-    "Отсутствие формы / бейджа",
+    "Нарушение лок. акта №36",
     "Нарушение дисциплины",
     "Курение в неположенном месте",
     "Другое",
@@ -51,10 +51,21 @@ VIOLATION_TYPES = [
 
 VIOLATION_COLORS = {
     "Опоздание": "orange",
-    "Отсутствие формы / бейджа": "yellow",
+    "Нарушение лок. акта №36": "yellow",
     "Нарушение дисциплины": "red",
     "Курение в неположенном месте": "darkred",
     "Другое": "gray",
+}
+
+# Отделения: ключ = буквенный префикс группы (цифры после него — номер группы).
+DEPARTMENTS = {
+    "ЗЧС": "Отделение ЗЧС",
+    "ПБ": "Отделение ПБ",
+    "БПЛА": "Отделение БПЛА",
+    "МК": "Отделение МК",
+    "СР": "Отделение СР",
+    "ЮП": "Отделение ЮП",
+    "ЭБПК": "Отделение ЭБПК",
 }
 
 COOKIE_PATROL_NAME = "patrol_name"
@@ -119,6 +130,11 @@ def init_db() -> None:
             duration_minutes INTEGER
         )
         """
+    )
+    # Автоматическое переименование старого типа нарушения в новый
+    conn.execute(
+        "UPDATE violations SET violation_type = ? WHERE violation_type = ?",
+        ("Нарушение лок. акта №36", "Отсутствие формы / бейджа"),
     )
     count = conn.execute("SELECT COUNT(*) FROM patrol_members").fetchone()[0]
     if count == 0:
@@ -186,7 +202,7 @@ def get_patrol_name(request: Request) -> Optional[str]:
 def get_badge_class(violation_type: str) -> str:
     return f"badge badge-{VIOLATION_COLORS.get(violation_type, 'gray')}"
 
-def get_repeat_offenders(min_count: int = 3):
+def get_repeat_offenders(min_count: int = 2):
     conn = get_db_connection()
     rows = conn.execute(
         "SELECT student_name FROM violations GROUP BY student_name HAVING COUNT(*) >= ?",
@@ -206,12 +222,15 @@ def get_known_students():
         known.setdefault(row["student_name"], row["student_group"])
     return known
 
-def build_violations_query(student_name, violation_type, date_from, date_to):
+def build_violations_query(student_name, group, violation_type, date_from, date_to):
     query = "SELECT * FROM violations WHERE 1=1"
     params = []
     if student_name:
         query += " AND student_name LIKE ?"
         params.append(f"%{student_name}%")
+    if group:
+        query += " AND student_group LIKE ?"
+        params.append(f"%{group}%")
     if violation_type:
         query += " AND violation_type = ?"
         params.append(violation_type)
@@ -451,6 +470,7 @@ def admin_logout():
 def admin_panel(
     request: Request,
     student_name: Optional[str] = None,
+    group: Optional[str] = None,
     violation_type: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -465,7 +485,7 @@ def admin_panel(
     if dir not in ("asc", "desc"):
         dir = "desc"
 
-    query, params = build_violations_query(student_name, violation_type, date_from, date_to)
+    query, params = build_violations_query(student_name, group, violation_type, date_from, date_to)
     conn = get_db_connection()
     total = conn.execute(query.replace("SELECT *", "SELECT COUNT(*)", 1), params).fetchone()[0]
     pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
@@ -478,6 +498,7 @@ def admin_panel(
 
     base_params = {
         "student_name": student_name or "",
+        "group": group or "",
         "violation_type": violation_type or "",
         "date_from": date_from or "",
         "date_to": date_to or "",
@@ -510,6 +531,7 @@ def admin_panel(
             "violations": rows,
             "violation_types": VIOLATION_TYPES,
             "name_filter": student_name or "",
+            "group_filter": group or "",
             "type_filter": violation_type or "",
             "date_from_filter": date_from or "",
             "date_to_filter": date_to or "",
@@ -608,6 +630,45 @@ def admin_delete(request: Request, violation_id: int):
     conn.commit()
     conn.close()
     return toast_redirect("/admin", "Запись удалена")
+
+@app.post("/admin/restore")
+async def admin_restore(request: Request, file: UploadFile = File(...)):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    content = await file.read()
+    text = content.decode("utf-8-sig")
+    reader = csv.reader(io.StringIO(text), delimiter=";")
+    rows = list(reader)
+    if len(rows) < 2:
+        return toast_redirect("/admin", "Файл пуст или не содержит записей")
+    restored = 0
+    skipped = 0
+    conn = get_db_connection()
+    for r in rows[1:]:
+        if len(r) < 7:
+            continue
+        _, patrol_name, student_name, student_group, violation_type, comment, created_at = r[:7]
+        if not student_name.strip():
+            continue
+        exists = conn.execute(
+            "SELECT 1 FROM violations WHERE student_name = ? AND created_at = ? AND violation_type = ?",
+            (student_name, created_at, violation_type),
+        ).fetchone()
+        if exists:
+            skipped += 1
+            continue
+        conn.execute(
+            """
+            INSERT INTO violations
+                (patrol_name, student_name, student_group, violation_type, comment, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (patrol_name, student_name, student_group, violation_type, comment, created_at),
+        )
+        restored += 1
+    conn.commit()
+    conn.close()
+    return toast_redirect("/admin", f"Восстановлено записей: {restored}" + (f", пропущено дубликатов: {skipped}" if skipped else ""))
 
 @app.get("/admin/patrol", response_class=HTMLResponse)
 def admin_patrol_page(request: Request):
@@ -720,29 +781,46 @@ def admin_shifts_page(request: Request):
     )
 
 @app.get("/admin/report", response_class=HTMLResponse)
-def admin_report(request: Request):
+def admin_report(
+    request: Request,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    department: Optional[str] = None,
+):
     if not is_admin(request):
         return RedirectResponse(url="/login", status_code=303)
     now = datetime.now()
-    start = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    if not date_from:
+        date_from = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    if not date_to:
+        date_to = now.strftime("%Y-%m-%d")
+
+    query = "SELECT * FROM violations WHERE created_at >= ? AND created_at <= ?"
+    params = [date_from + " 00:00:00", date_to + " 23:59:59"]
+    if department:
+        query += " AND student_group LIKE ?"
+        params.append(f"{department}%")
+    query += " ORDER BY created_at DESC"
+
     conn = get_db_connection()
-    rows = conn.execute(
-        "SELECT * FROM violations WHERE created_at >= ? ORDER BY created_at DESC",
-        (start + " 00:00:00",),
-    ).fetchall()
+    rows = conn.execute(query, params).fetchall()
     conn.close()
     by_type = Counter(r["violation_type"] for r in rows)
+
     return templates.TemplateResponse(
         "report.html",
         {
             "request": request,
             "rows": rows,
-            "period_start": start,
-            "period_end": now.strftime("%Y-%m-%d"),
+            "period_start": date_from,
+            "period_end": date_to,
             "generated": now.strftime("%d.%m.%Y %H:%M"),
             "total": len(rows),
             "by_type": by_type.most_common(),
             "get_badge_class": get_badge_class,
+            "departments": DEPARTMENTS,
+            "dept_filter": department or "",
+            "dept_name": DEPARTMENTS.get(department or "", ""),
         },
     )
 
@@ -750,13 +828,14 @@ def admin_report(request: Request):
 def admin_export(
     request: Request,
     student_name: Optional[str] = None,
+    group: Optional[str] = None,
     violation_type: Optional[str] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ):
     if not is_admin(request):
         return RedirectResponse(url="/login", status_code=303)
-    query, params = build_violations_query(student_name, violation_type, date_from, date_to)
+    query, params = build_violations_query(student_name, group, violation_type, date_from, date_to)
     query += " ORDER BY created_at DESC, id DESC"
     conn = get_db_connection()
     rows = conn.execute(query, params).fetchall()
