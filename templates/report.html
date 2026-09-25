@@ -14,23 +14,23 @@
         <div class="page-header no-print">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
-                <div class="page-title"><span>🖨</span><span>Отчёт за период</span></div>
+                <div class="page-title"><span>Отчёт за период</span></div>
             </div>
-            <button class="btn btn-primary" onclick="window.print()">🖨 Печать</button>
+            <button class="btn btn-primary" onclick="window.print()">Печать</button>
         </div>
 
         <div class="filters-card no-print">
             <form action="/admin/report" method="GET" class="filters-form">
                 <div class="form-group" style="margin: 0;">
-                    <label class="form-label" for="date_from">📅 С даты</label>
-                    <input class="form-input" type="date" id="date_from" name="date_from" value="{{ period_start }}">
+                    <label class="form-label" for="date_from">С даты</label>
+                    <input class="form-input mono" type="date" id="date_from" name="date_from" value="{{ period_start }}">
                 </div>
                 <div class="form-group" style="margin: 0;">
-                    <label class="form-label" for="date_to">📅 По дату</label>
-                    <input class="form-input" type="date" id="date_to" name="date_to" value="{{ period_end }}">
+                    <label class="form-label" for="date_to">По дату</label>
+                    <input class="form-input mono" type="date" id="date_to" name="date_to" value="{{ period_end }}">
                 </div>
                 <div class="form-group" style="margin: 0;">
-                    <label class="form-label" for="department">🏛 Отделение</label>
+                    <label class="form-label" for="department">Отделение</label>
                     <select class="form-select" id="department" name="department">
                         <option value="">Все отделения</option>
                         {% for key, name in departments.items() %}
@@ -39,17 +39,18 @@
                     </select>
                 </div>
                 <div class="filters-actions">
-                    <button type="submit" class="btn btn-primary">🔍 Сформировать</button>
+                    <button type="submit" class="btn btn-primary">Сформировать</button>
                     <a href="/admin/report" class="btn btn-secondary">Сбросить</a>
                 </div>
             </form>
         </div>
 
         <div class="card report-sheet">
-            <h2 style="text-align: center;">ОТЧЁТ<br>о нарушениях студентов</h2>
+            <div class="stamp">Служебная информация</div>
+            <h2 style="text-align: center; letter-spacing: 0.2em; text-transform: uppercase;">Отчёт<br>о нарушениях студентов</h2>
             <p class="report-meta" style="text-align: center;">Период: с {{ period_start }} по {{ period_end }}{% if dept_name %} · {{ dept_name }}{% endif %} · Сформирован: {{ generated }}</p>
 
-            <p style="margin: 20px 0 8px;"><strong>Всего нарушений: {{ total }}</strong></p>
+            <p style="margin: 20px 0 8px;"><strong>ВСЕГО НАРУШЕНИЙ: {{ total }}</strong></p>
             <p style="margin-bottom: 20px;">
                 По типам:
                 {% for t, c in by_type %}
@@ -74,10 +75,10 @@
                         {% for v in rows %}
                         <tr>
                             <td>{{ loop.index }}</td>
-                            <td>{{ v.created_at }}</td>
+                            <td class="mono">{{ v.created_at }}</td>
                             <td>{{ v.patrol_name }}</td>
                             <td>{{ v.student_name }}</td>
-                            <td>{{ v.student_group }}</td>
+                            <td class="mono">{{ v.student_group }}</td>
                             <td>{{ v.violation_type }}</td>
                             <td>{{ v.comment or "—" }}</td>
                         </tr>
