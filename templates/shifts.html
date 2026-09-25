@@ -14,21 +14,21 @@
         <div class="page-header">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
-                <div class="page-title"><span>🕐</span><span>Учёт смен патруля</span></div>
+                <div class="page-title"><span>Учёт смен патруля</span></div>
             </div>
         </div>
 
         <div class="table-card" style="margin-bottom: 20px;">
             <div class="table-header">
-                <div class="table-title">🏆 Итоги за 30 дней</div>
+                <div class="table-title">Итоги за 30 дней</div>
             </div>
             <div class="table-wrapper">
                 <table>
                     <thead>
                         <tr>
-                            <th>👤 Патрульный</th>
-                            <th>📋 Смен</th>
-                            <th>⏱ Всего времени</th>
+                            <th>Патрульный</th>
+                            <th>Смен</th>
+                            <th>Всего времени</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -42,7 +42,7 @@
                         <tr>
                             <td colspan="3">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon">📭</div>
+                                    <div class="empty-state-icon">∅</div>
                                     <div class="empty-state-text">Завершённых смен пока нет</div>
                                 </div>
                             </td>
@@ -61,18 +61,18 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>👤 Патрульный</th>
-                            <th>▶️ Начало</th>
-                            <th>⏹ Окончание</th>
-                            <th>⏱ Длительность</th>
+                            <th>Патрульный</th>
+                            <th>Начало</th>
+                            <th>Окончание</th>
+                            <th>Длительность</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for s in recent %}
                         <tr>
                             <td><strong>{{ s.patrol_name }}</strong></td>
-                            <td>{{ s.started_at }}</td>
-                            <td>{{ s.ended_at or "—" }}</td>
+                            <td class="mono">{{ s.started_at }}</td>
+                            <td class="mono">{{ s.ended_at or "—" }}</td>
                             <td>
                                 {% if s.ended_at %}
                                 <span class="badge badge-green">{{ format_duration(s.duration_minutes or 0) }}</span>
@@ -85,7 +85,7 @@
                         <tr>
                             <td colspan="4">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon">📭</div>
+                                    <div class="empty-state-icon">∅</div>
                                     <div class="empty-state-text">Смен пока нет</div>
                                 </div>
                             </td>
