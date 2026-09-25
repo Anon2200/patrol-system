@@ -1,41 +1,43 @@
-<!-- ===== Боковое меню ===== -->
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-        <div class="sidebar-logo">🛡️</div>
-        <div class="sidebar-title">Патрульная служба</div>
+        <svg class="emblem-sm" viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M32 6 L54 13 V30 C54 45 45 54 32 58 C19 54 10 45 10 30 V13 Z" fill="none" stroke="currentColor" stroke-width="3"/>
+            <path d="M32 16 L36.4 27 L48 27.8 L39 35.2 L42.2 46.4 L32 40 L21.8 46.4 L25 35.2 L16 27.8 L27.6 27 Z" fill="currentColor"/>
+        </svg>
+        <div class="sidebar-title">Патрульная<br>служба</div>
         <button class="sidebar-close" onclick="closeSidebar()" title="Закрыть">✕</button>
     </div>
 
     <nav class="sidebar-nav">
         <div class="sidebar-group {% if request.url.path in ['/admin', '/admin/add'] %}open{% endif %}">
-            <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">📋 Нарушения <span class="arrow">▾</span></button>
+            <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Нарушения <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
-                <a href="/admin" class="sidebar-sublink {% if request.url.path == '/admin' %}active{% endif %}">⚙️ Список и фильтры</a>
-                <a href="/admin/add" class="sidebar-sublink {% if request.url.path == '/admin/add' %}active{% endif %}">➕ Добавить нарушение</a>
+                <a href="/admin" class="sidebar-sublink {% if request.url.path == '/admin' %}active{% endif %}">Список и фильтры</a>
+                <a href="/admin/add" class="sidebar-sublink {% if request.url.path == '/admin/add' %}active{% endif %}">Добавить нарушение</a>
             </div>
         </div>
 
         <div class="sidebar-group {% if request.url.path in ['/stats', '/admin/report'] %}open{% endif %}">
-            <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">📊 Аналитика <span class="arrow">▾</span></button>
+            <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Аналитика <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
-                <a href="/stats" class="sidebar-sublink {% if request.url.path == '/stats' %}active{% endif %}">📈 Статистика и графики</a>
-                <a href="/admin/report" class="sidebar-sublink {% if request.url.path == '/admin/report' %}active{% endif %}">🖨 Отчёт за неделю</a>
+                <a href="/stats" class="sidebar-sublink {% if request.url.path == '/stats' %}active{% endif %}">Статистика и графики</a>
+                <a href="/admin/report" class="sidebar-sublink {% if request.url.path == '/admin/report' %}active{% endif %}">Отчёт за период</a>
             </div>
         </div>
 
         <div class="sidebar-group {% if request.url.path in ['/admin/schedule', '/admin/shifts', '/admin/patrol'] %}open{% endif %}">
-            <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">🛡️ Патруль <span class="arrow">▾</span></button>
+            <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Патруль <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
-                <a href="/admin/schedule" class="sidebar-sublink {% if request.url.path == '/admin/schedule' %}active{% endif %}">📅 График дежурств</a>
-                <a href="/admin/shifts" class="sidebar-sublink {% if request.url.path == '/admin/shifts' %}active{% endif %}">🕐 Учёт смен</a>
-                <a href="/admin/patrol" class="sidebar-sublink {% if request.url.path == '/admin/patrol' %}active{% endif %}">👥 Состав патруля</a>
+                <a href="/admin/schedule" class="sidebar-sublink {% if request.url.path == '/admin/schedule' %}active{% endif %}">График дежурств</a>
+                <a href="/admin/shifts" class="sidebar-sublink {% if request.url.path == '/admin/shifts' %}active{% endif %}">Учёт смен</a>
+                <a href="/admin/patrol" class="sidebar-sublink {% if request.url.path == '/admin/patrol' %}active{% endif %}">Состав патруля</a>
             </div>
         </div>
     </nav>
 
     <div class="sidebar-footer">
-        <button class="sidebar-link" onclick="toggleTheme()"><span class="theme-icon">🌙</span> Тема оформления</button>
-        <a href="/admin/logout" class="sidebar-link danger">🚪 Выйти</a>
+        <button class="sidebar-link" onclick="toggleTheme()"><span class="theme-icon">РЕЖИМ: НОЧЬ</span></button>
+        <a href="/admin/logout" class="sidebar-link danger">Выход</a>
     </div>
 </aside>
