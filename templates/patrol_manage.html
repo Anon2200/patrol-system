@@ -14,12 +14,12 @@
         <div class="page-header">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
-                <div class="page-title"><span>👥</span><span>Состав патруля</span></div>
+                <div class="page-title"><span>Состав патруля</span></div>
             </div>
         </div>
 
         <div class="card" style="margin-bottom: 20px;">
-            <h3 style="margin-bottom: 16px;">➕ Добавить патрульного</h3>
+            <h3 style="margin-bottom: 16px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Добавить патрульного</h3>
             <form action="/admin/patrol/add" method="POST" style="display: flex; gap: 12px; flex-wrap: wrap;">
                 <input class="form-input" style="flex: 1; min-width: 220px;" type="text" name="name" placeholder="Фамилия (например, Петров)" required>
                 <button type="submit" class="btn btn-primary">Добавить</button>
@@ -28,26 +28,26 @@
 
         <div class="table-card">
             <div class="table-header">
-                <div class="table-title">Текущий состав ({{ names|length }})</div>
+                <div class="table-title">Текущий состав · {{ names|length }}</div>
             </div>
             <div class="table-wrapper">
                 <table>
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>👤 ФИО</th>
+                            <th>ФИО</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for name in names %}
                         <tr>
-                            <td>{{ loop.index }}</td>
+                            <td class="mono">{{ loop.index }}</td>
                             <td><strong>{{ name }}</strong></td>
                             <td>
                                 <form action="/admin/patrol/delete" method="POST" onsubmit="return confirm('Убрать {{ name }} из состава патруля?');">
                                     <input type="hidden" name="name" value="{{ name }}">
-                                    <button type="submit" class="btn btn-danger btn-sm">🗑 Убрать</button>
+                                    <button type="submit" class="btn btn-danger btn-sm">Убрать</button>
                                 </form>
                             </td>
                         </tr>
@@ -55,8 +55,8 @@
                         <tr>
                             <td colspan="3">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon">📭</div>
-                                    <div class="empty-state-text">Список пуст — добавьте патрульных</div>
+                                    <div class="empty-state-icon">∅</div>
+                                    <div class="empty-state-text">Список пуст</div>
                                 </div>
                             </td>
                         </tr>
