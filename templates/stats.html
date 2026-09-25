@@ -14,28 +14,28 @@
         <div class="page-header">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
-                <div class="page-title"><span>📊</span><span>Статистика нарушений</span></div>
+                <div class="page-title"><span>Статистика нарушений</span></div>
             </div>
         </div>
 
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-icon">📈</div>
+                <div class="stat-icon">// 01</div>
                 <div class="stat-number">{{ total }}</div>
                 <div class="stat-label">Всего нарушений</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">📅</div>
+                <div class="stat-icon">// 02</div>
                 <div class="stat-number">{{ today_count }}</div>
                 <div class="stat-label">За сегодня</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">📆</div>
+                <div class="stat-icon">// 03</div>
                 <div class="stat-number">{{ week_count }}</div>
                 <div class="stat-label">За 7 дней</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">🗓️</div>
+                <div class="stat-icon">// 04</div>
                 <div class="stat-number">{{ month_count }}</div>
                 <div class="stat-label">За 30 дней</div>
             </div>
@@ -43,29 +43,29 @@
 
         <div class="charts-grid">
             <div class="chart-card">
-                <div class="chart-title"><span>📊</span><span>Нарушения по дням (последние 14 дней)</span></div>
+                <div class="chart-title">Нарушения по дням · последние 14 дней</div>
                 <div class="vbars" id="barsDay"></div>
             </div>
             <div class="chart-card">
-                <div class="chart-title"><span>⚠️</span><span>По типам нарушений</span></div>
+                <div class="chart-title">По типам нарушений</div>
                 <div id="barsType"></div>
             </div>
             <div class="chart-card">
-                <div class="chart-title"><span>🏫</span><span>Топ-5 групп по нарушениям</span></div>
+                <div class="chart-title">Топ-5 групп по нарушениям</div>
                 <div id="barsGroups"></div>
             </div>
         </div>
 
         <div class="table-card">
             <div class="table-header">
-                <div class="table-title">🛡️ Активность патрульных</div>
+                <div class="table-title">Активность патрульных</div>
             </div>
             <div class="table-wrapper">
                 <table>
                     <thead>
                         <tr>
-                            <th>👤 Патрульный</th>
-                            <th>📋 Зафиксировано нарушений</th>
+                            <th>Патрульный</th>
+                            <th>Зафиксировано нарушений</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -78,7 +78,7 @@
                         <tr>
                             <td colspan="2">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon">📭</div>
+                                    <div class="empty-state-icon">∅</div>
                                     <div class="empty-state-text">Данных пока нет</div>
                                 </div>
                             </td>
@@ -93,16 +93,16 @@
     <script>
         const data = {{ chart_data_json | safe }};
         const COLORS = [
-            'linear-gradient(90deg, #f59e0b, #d97706)',
-            'linear-gradient(90deg, #eab308, #ca8a04)',
-            'linear-gradient(90deg, #ef4444, #dc2626)',
-            'linear-gradient(90deg, #ec4899, #db2777)',
-            'linear-gradient(90deg, #6b7280, #4b5563)'
+            'repeating-linear-gradient(45deg, #c8a24a, #c8a24a 6px, rgba(200,162,74,0.55) 6px, rgba(200,162,74,0.55) 12px)',
+            'repeating-linear-gradient(45deg, #6fa0c8, #6fa0c8 6px, rgba(111,160,200,0.55) 6px, rgba(111,160,200,0.55) 12px)',
+            'repeating-linear-gradient(45deg, #d05353, #d05353 6px, rgba(208,83,83,0.55) 6px, rgba(208,83,83,0.55) 12px)',
+            'repeating-linear-gradient(45deg, #5fae7f, #5fae7f 6px, rgba(95,174,127,0.55) 6px, rgba(95,174,127,0.55) 12px)',
+            'repeating-linear-gradient(45deg, #8593a2, #8593a2 6px, rgba(133,147,162,0.55) 6px, rgba(133,147,162,0.55) 12px)'
         ];
 
         function renderVerticalBars(id, labels, counts) {
             const el = document.getElementById(id);
-            if (!labels.length) { el.outerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-text">Данных пока нет</div></div>'; return; }
+            if (!labels.length) { el.outerHTML = '<div class="empty-state"><div class="empty-state-icon">∅</div><div class="empty-state-text">Данных пока нет</div></div>'; return; }
             const max = Math.max(...counts, 1);
             el.innerHTML = labels.map((label, i) =>
                 '<div class="vbar-col">' +
@@ -115,7 +115,7 @@
 
         function renderHorizontalBars(id, labels, counts, colors) {
             const el = document.getElementById(id);
-            if (!labels.length) { el.outerHTML = '<div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-text">Данных пока нет</div></div>'; return; }
+            if (!labels.length) { el.outerHTML = '<div class="empty-state"><div class="empty-state-icon">∅</div><div class="empty-state-text">Данных пока нет</div></div>'; return; }
             const max = Math.max(...counts, 1);
             el.innerHTML = labels.map((label, i) => {
                 const color = Array.isArray(colors) ? colors[i % colors.length] : colors;
@@ -130,7 +130,7 @@
         renderVerticalBars('barsDay', data.days_labels, data.days_counts);
         renderHorizontalBars('barsType', data.type_labels, data.type_counts, COLORS);
         renderHorizontalBars('barsGroups', data.group_labels, data.group_counts, [
-            'linear-gradient(90deg, #3b82f6, #8b5cf6)'
+            'repeating-linear-gradient(45deg, #c8a24a, #c8a24a 6px, rgba(200,162,74,0.55) 6px, rgba(200,162,74,0.55) 12px)'
         ]);
     </script>
 </body>
