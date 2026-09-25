@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сбой {{ code }} — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-card" style="text-align: center;">
+            <div class="stat-number" style="font-size: 64px;">{{ code }}</div>
+            <h1 class="login-title" style="margin-top: 8px;">{% if code == 404 %}Объект не найден{% else %}Сбой системы{% endif %}</h1>
+            <p class="login-subtitle">{{ message }}</p>
+            <a href="/" class="btn btn-primary btn-block">Вернуться на главную</a>
+        </div>
+    </div>
+    <button class="theme-toggle floating" id="themeBtn" onclick="toggleTheme()">РЕЖИМ: НОЧЬ</button>
+</body>
+</html>
