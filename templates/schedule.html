@@ -14,28 +14,28 @@
         <div class="page-header">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
-                <div class="page-title"><span>📅</span><span>График дежурств</span></div>
+                <div class="page-title"><span>График дежурств</span></div>
             </div>
         </div>
 
         <div class="card" style="margin-bottom: 20px;">
-            <h3 style="margin-bottom: 16px;">➕ Назначить дежурство</h3>
+            <h3 style="margin-bottom: 16px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Назначить дежурство</h3>
             <form action="/admin/schedule/add" method="POST">
                 <div class="form-group">
-                    <label class="form-label" for="duty_date">📅 Дата дежурства</label>
-                    <input class="form-input" type="date" id="duty_date" name="duty_date" value="{{ today }}" required>
+                    <label class="form-label" for="duty_date">Дата дежурства</label>
+                    <input class="form-input mono" type="date" id="duty_date" name="duty_date" value="{{ today }}" required>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">👥 Кто дежурит (отметьте галочками)</label>
+                    <label class="form-label">Кто дежурит (отметьте)</label>
                     <div style="display: flex; flex-wrap: wrap; gap: 10px;">
                         {% for name in names %}
-                        <label style="display: flex; align-items: center; gap: 6px; background: var(--row-hover); padding: 8px 14px; border-radius: 20px; cursor: pointer; font-size: 14px;">
+                        <label style="display: flex; align-items: center; gap: 6px; background: var(--panel2); border: 1px solid var(--line); padding: 8px 14px; border-radius: 2px; cursor: pointer; font-size: 13px;">
                             <input type="checkbox" name="names" value="{{ name }}"> {{ name }}
                         </label>
                         {% endfor %}
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary">💾 Сохранить график</button>
+                <button type="submit" class="btn btn-primary">Сохранить график</button>
             </form>
         </div>
 
@@ -47,14 +47,14 @@
                 <table>
                     <thead>
                         <tr>
-                            <th>📅 Дата</th>
-                            <th>👥 Дежурные</th>
+                            <th>Дата</th>
+                            <th>Дежурные</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for date, people in schedule_list %}
                         <tr>
-                            <td><strong>{{ date }}</strong>{% if date == today %} <span class="badge badge-green">сегодня</span>{% endif %}</td>
+                            <td class="mono"><strong>{{ date }}</strong>{% if date == today %} <span class="badge badge-green">сегодня</span>{% endif %}</td>
                             <td>
                                 {% for p in people %}
                                 <span class="badge badge-blue" style="margin: 2px;">{{ p }}</span>
@@ -70,8 +70,8 @@
                         <tr>
                             <td colspan="2">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon">📭</div>
-                                    <div class="empty-state-text">Предстоящих дежурств нет — назначьте выше</div>
+                                    <div class="empty-state-icon">∅</div>
+                                    <div class="empty-state-text">Предстоящих дежурств нет</div>
                                 </div>
                             </td>
                         </tr>
