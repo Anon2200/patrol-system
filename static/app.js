@@ -1,22 +1,22 @@
 (function () {
     var saved = localStorage.getItem('theme');
-    if (saved) document.documentElement.setAttribute('data-theme', saved);
+    if (!saved) { saved = 'dark'; }
+    document.documentElement.setAttribute('data-theme', saved);
 })();
 
 function toggleTheme() {
-    var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    var cur = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
     document.documentElement.setAttribute('data-theme', cur);
     localStorage.setItem('theme', cur);
     applyThemeIcon();
 }
 
 function applyThemeIcon() {
-    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    var dark = document.documentElement.getAttribute('data-theme') !== 'light';
+    var label = dark ? 'РЕЖИМ: НОЧЬ' : 'РЕЖИМ: ДЕНЬ';
     var btn = document.getElementById('themeBtn');
-    if (btn) btn.textContent = dark ? '☀️' : '🌙';
-    document.querySelectorAll('.theme-icon').forEach(function (el) {
-        el.textContent = dark ? '☀️' : '🌙';
-    });
+    if (btn) btn.textContent = label;
+    document.querySelectorAll('.theme-icon').forEach(function (el) { el.textContent = label; });
 }
 
 function showToast(msg, type) {
@@ -31,7 +31,6 @@ function showToast(msg, type) {
     }, 3500);
 }
 
-// ===== Боковое меню =====
 function openSidebar() {
     var sb = document.getElementById('sidebar');
     var ov = document.getElementById('sidebarOverlay');
