@@ -6,7 +6,7 @@
     <title>Патрульная служба колледжа</title>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="manifest" href="/manifest.webmanifest">
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#0a0e13">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/app.js"></script>
 </head>
@@ -14,17 +14,27 @@
     {% if not logged_in %}
     <div class="login-wrapper">
         <div class="login-card">
-            <div class="login-logo">🛡️</div>
+            <div class="emblem-wrap">
+                <svg class="emblem" viewBox="0 0 64 64" aria-hidden="true">
+                    <path d="M32 6 L54 13 V30 C54 45 45 54 32 58 C19 54 10 45 10 30 V13 Z" fill="none" stroke="currentColor" stroke-width="3"/>
+                    <path d="M32 16 L36.4 27 L48 27.8 L39 35.2 L42.2 46.4 L32 40 L21.8 46.4 L25 35.2 L16 27.8 L27.6 27 Z" fill="currentColor"/>
+                </svg>
+            </div>
             <h1 class="login-title">Патрульная служба</h1>
-            <p class="login-subtitle">Вход для патрульного</p>
+            <p class="login-subtitle">Терминал патрульного</p>
+
+            <div class="boot-log">
+                <div class="boot-line">&gt; ЗАГРУЗКА СПИСКА СОСТАВА...</div>
+                <div class="boot-line">&gt; КАНАЛ СВЯЗИ АКТИВЕН</div>
+            </div>
 
             {% if error %}
-            <div class="alert alert-error">⚠️ {{ error }}</div>
+            <div class="alert alert-error">{{ error }}</div>
             {% endif %}
 
             <form action="/patrol/login" method="POST">
                 <div class="form-group">
-                    <label class="form-label" for="patrol_name">👤 Ваше ФИО</label>
+                    <label class="form-label" for="patrol_name">Ваше ФИО</label>
                     <select class="form-select" id="patrol_name" name="patrol_name" required>
                         <option value="" disabled selected>Выберите ФИО из списка</option>
                         {% for name in patrol_names %}
@@ -34,52 +44,52 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="pin">🔐 ПИН-код</label>
-                    <input class="form-input" type="password" id="pin" name="pin" required>
+                    <label class="form-label" for="pin">ПИН-код</label>
+                    <input class="form-input mono" type="password" id="pin" name="pin" required>
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-block">Войти</button>
             </form>
 
             <div class="login-footer">
-                <a href="/login">🔑 Вход для администратора</a>
+                <a href="/login">Служебный вход администратора</a>
             </div>
         </div>
     </div>
-    <button class="theme-toggle floating" id="themeBtn" onclick="toggleTheme()">🌙</button>
+    <button class="theme-toggle floating" id="themeBtn" onclick="toggleTheme()">РЕЖИМ: НОЧЬ</button>
     {% else %}
     <div class="container">
         <div class="page-header">
             <div class="page-title">
-                <span>📋</span>
+                <span class="status-dot"></span>
                 <span>Фиксация нарушения</span>
             </div>
             <div class="nav-links">
-                <span class="user-badge">👤 {{ patrol_name }}</span>
-                <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">🌙</button>
+                <span class="user-badge">{{ patrol_name }}</span>
+                <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">РЕЖИМ: НОЧЬ</button>
                 <a href="/patrol/logout" class="nav-link nav-link-danger">Выйти</a>
             </div>
         </div>
 
-        <div class="card" style="margin-bottom: 20px; padding: 20px;">
+        <div class="card" style="margin-bottom: 20px; padding: 18px 22px;">
             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                 <div>
                     {% if on_duty_today %}
-                    <div class="alert alert-success" style="margin: 0;">📅 Сегодня вы дежурите!{% if duty_colleagues %} С вами: {{ duty_colleagues | join(', ') }}{% endif %}</div>
+                    <div class="alert alert-success" style="margin: 0;">Сегодня вы дежурите{% if duty_colleagues %} · с вами: {{ duty_colleagues | join(', ') }}{% endif %}</div>
                     {% else %}
-                    <div style="color: var(--muted); font-size: 14px;">📅 Сегодня вы не в графике дежурств.</div>
+                    <div style="color: var(--muted); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase;">Сегодня вы не в графике дежурств</div>
                     {% endif %}
-                    <div style="color: var(--muted); font-size: 13px; margin-top: 6px;">🕐 За 30 дней: {{ my_shifts_count }} смен, {{ my_hours }} ч</div>
+                    <div style="color: var(--muted); font-size: 11px; margin-top: 6px; letter-spacing: 0.08em;">ЗА 30 ДНЕЙ: {{ my_shifts_count }} СМЕН · {{ my_hours }} Ч</div>
                 </div>
                 <div>
                     {% if open_shift %}
-                    <span class="badge badge-green" style="margin-right: 8px;">🟢 Смена с {{ open_shift }}</span>
+                    <span class="badge badge-green" style="margin-right: 8px;">СМЕНА С {{ open_shift }}</span>
                     <form style="display: inline;" action="/shift/end" method="POST">
-                        <button type="submit" class="btn btn-danger">⏹ Завершить смену</button>
+                        <button type="submit" class="btn btn-danger">Завершить смену</button>
                     </form>
                     {% else %}
                     <form style="display: inline;" action="/shift/start" method="POST">
-                        <button type="submit" class="btn btn-success">▶️ Начать смену</button>
+                        <button type="submit" class="btn btn-success">Начать смену</button>
                     </form>
                     {% endif %}
                 </div>
@@ -87,22 +97,22 @@
         </div>
 
         <div class="card">
-            <div id="offlineBadge" class="alert alert-error" style="display: none;">📴 Нет сети: <span id="offlineCount">0</span> зап. ждут отправки. Они уйдут автоматически.</div>
+            <div id="offlineBadge" class="alert alert-error" style="display: none;">НЕТ СВЯЗИ: <span id="offlineCount">0</span> ЗАП. В ОЧЕРЕДИ · ОТПРАВЯТСЯ АВТОМАТИЧЕСКИ</div>
 
             {% if dup_warning %}
-            <div class="alert alert-error">⚠️ {{ dup_warning }}</div>
+            <div class="alert alert-error">{{ dup_warning }}</div>
             {% endif %}
 
             <form action="/add" method="POST" id="violationForm">
                 <input type="hidden" name="dup_confirm" value="{% if dup_warning %}1{% else %}0{% endif %}">
 
                 <div class="form-group">
-                    <label class="form-label" for="student_group">🏫 Группа нарушителя</label>
-                    <input class="form-input" type="text" id="student_group" name="student_group" value="{{ form_group }}" required>
+                    <label class="form-label" for="student_group">Группа нарушителя</label>
+                    <input class="form-input mono" type="text" id="student_group" name="student_group" value="{{ form_group }}" required>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="student_name">👤 ФИО студента-нарушителя</label>
+                    <label class="form-label" for="student_name">ФИО студента-нарушителя</label>
                     <input class="form-input" type="text" id="student_name" name="student_name" list="students_list" autocomplete="off" required placeholder="Начните вводить фамилию..." value="{{ form_name }}">
                     <datalist id="students_list">
                         {% for s in known_students %}
@@ -112,7 +122,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="violation_type">⚠️ Тип нарушения</label>
+                    <label class="form-label" for="violation_type">Тип нарушения</label>
                     <select class="form-select" id="violation_type" name="violation_type" required>
                         {% for v_type in violation_types %}
                         <option value="{{ v_type }}" {% if form_type == v_type %}selected{% endif %}>{{ v_type }}</option>
@@ -121,11 +131,11 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label" for="comment">💬 Детали / Комментарий</label>
+                    <label class="form-label" for="comment">Детали / комментарий</label>
                     <textarea class="form-textarea" id="comment" name="comment" placeholder="Опишите нарушение подробнее (необязательно)">{{ form_comment }}</textarea>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-block">{% if dup_warning %}⚠️ Сохранить всё равно{% else %}💾 Сохранить нарушение{% endif %}</button>
+                <button type="submit" class="btn btn-primary btn-block">{% if dup_warning %}Сохранить всё равно{% else %}Сохранить нарушение{% endif %}</button>
             </form>
         </div>
     </div>
@@ -141,7 +151,6 @@
             }
         });
 
-        // ===== ОФЛАЙН-РЕЖИМ: очередь записей =====
         const QUEUE_KEY = 'offline_violations';
         const form = document.getElementById('violationForm');
 
@@ -196,7 +205,6 @@
         window.addEventListener('online', flushQueue);
         window.addEventListener('load', function () { updateOfflineBadge(); flushQueue(); });
 
-        // Регистрация service worker (офлайн-оболочка + установка как приложение)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js'); });
         }
