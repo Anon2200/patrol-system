@@ -14,22 +14,25 @@
         <div class="page-header">
             <div style="display: flex; align-items: center; gap: 12px;">
                 <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
-                <div class="page-title"><span>⚙️</span><span>Админ-панель</span></div>
+                <div class="page-title"><span class="status-dot"></span><span>Админ-панель</span></div>
+            </div>
+            <div class="nav-links">
+                <span class="badge badge-green">Доступ: администратор</span>
             </div>
         </div>
 
         <div class="filters-card">
             <form action="/admin" method="GET" class="filters-form">
                 <div class="form-group" style="margin: 0;">
-                    <label class="form-label" for="student_name">👤 ФИО студента</label>
+                    <label class="form-label" for="student_name">ФИО студента</label>
                     <input class="form-input" type="text" id="student_name" name="student_name" value="{{ name_filter }}" placeholder="Поиск...">
                 </div>
                 <div class="form-group" style="margin: 0;">
-                    <label class="form-label" for="group">🏫 Группа</label>
-                    <input class="form-input" type="text" id="group" name="group" value="{{ group_filter }}" placeholder="Напр. 205">
+                    <label class="form-label" for="group">Группа</label>
+                    <input class="form-input mono" type="text" id="group" name="group" value="{{ group_filter }}" placeholder="Напр. ЗЧС-205">
                 </div>
                 <div class="form-group" style="margin: 0;">
-                    <label class="form-label" for="violation_type">⚠️ Тип нарушения</label>
+                    <label class="form-label" for="violation_type">Тип нарушения</label>
                     <select class="form-select" id="violation_type" name="violation_type">
                         <option value="">Все типы</option>
                         {% for v_type in violation_types %}
@@ -38,15 +41,15 @@
                     </select>
                 </div>
                 <div class="form-group" style="margin: 0;">
-                    <label class="form-label" for="date_from">📅 С даты</label>
-                    <input class="form-input" type="date" id="date_from" name="date_from" value="{{ date_from_filter }}">
+                    <label class="form-label" for="date_from">С даты</label>
+                    <input class="form-input mono" type="date" id="date_from" name="date_from" value="{{ date_from_filter }}">
                 </div>
                 <div class="form-group" style="margin: 0;">
-                    <label class="form-label" for="date_to">📅 По дату</label>
-                    <input class="form-input" type="date" id="date_to" name="date_to" value="{{ date_to_filter }}">
+                    <label class="form-label" for="date_to">По дату</label>
+                    <input class="form-input mono" type="date" id="date_to" name="date_to" value="{{ date_to_filter }}">
                 </div>
                 <div class="filters-actions">
-                    <button type="submit" class="btn btn-primary">🔍 Применить</button>
+                    <button type="submit" class="btn btn-primary">Применить</button>
                     <a href="/admin" class="btn btn-secondary">Сбросить</a>
                 </div>
             </form>
@@ -54,13 +57,13 @@
 
         <div class="table-card">
             <div class="table-header">
-                <div class="table-title">📋 Список нарушений <span style="color: var(--muted); font-weight: 500;">(всего: {{ total }})</span></div>
+                <div class="table-title">Список нарушений · всего: {{ total }}</div>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
                     <form action="/admin/restore" method="POST" enctype="multipart/form-data" style="display: flex; gap: 8px; align-items: center;" onsubmit="return confirm('Восстановить записи из CSV-файла? Существующие дубликаты будут пропущены.');">
                         <input type="file" name="file" accept=".csv" class="form-input" style="max-width: 240px; padding: 6px 10px;">
-                        <button type="submit" class="btn btn-secondary">♻️ Восстановить</button>
+                        <button type="submit" class="btn btn-secondary">Восстановить</button>
                     </form>
-                    <a href="/admin/export?student_name={{ name_filter }}&group={{ group_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}" class="btn btn-success">📥 Экспорт в Excel</a>
+                    <a href="/admin/export?student_name={{ name_filter }}&group={{ group_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}" class="btn btn-success">Экспорт CSV</a>
                 </div>
             </div>
             <div class="table-wrapper">
@@ -68,12 +71,12 @@
                     <thead>
                         <tr>
                             <th><a class="th-link" href="{{ sort_urls['id'] }}"># {% if sort == 'id' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
-                            <th><a class="th-link" href="{{ sort_urls['created_at'] }}">🕐 Дата {% if sort == 'created_at' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
-                            <th><a class="th-link" href="{{ sort_urls['patrol_name'] }}">🛡️ Патрульный {% if sort == 'patrol_name' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
-                            <th><a class="th-link" href="{{ sort_urls['student_name'] }}">👤 Студент {% if sort == 'student_name' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
-                            <th><a class="th-link" href="{{ sort_urls['student_group'] }}">🏫 Группа {% if sort == 'student_group' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
-                            <th><a class="th-link" href="{{ sort_urls['violation_type'] }}">⚠️ Тип {% if sort == 'violation_type' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
-                            <th>💬 Комментарий</th>
+                            <th><a class="th-link" href="{{ sort_urls['created_at'] }}">Дата {% if sort == 'created_at' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th><a class="th-link" href="{{ sort_urls['patrol_name'] }}">Патрульный {% if sort == 'patrol_name' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th><a class="th-link" href="{{ sort_urls['student_name'] }}">Студент {% if sort == 'student_name' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th><a class="th-link" href="{{ sort_urls['student_group'] }}">Группа {% if sort == 'student_group' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th><a class="th-link" href="{{ sort_urls['violation_type'] }}">Тип {% if sort == 'violation_type' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th>Комментарий</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -82,20 +85,20 @@
                         <tr>
                             <td><strong>{{ v.id }}</strong></td>
                             <td>{{ v.created_at }}</td>
-                            <td>{% if v.patrol_name == "АДМИНИСТРАТОР" %}<span class="badge badge-darkred">🔑 АДМИНИСТРАТОР</span>{% else %}{{ v.patrol_name }}{% endif %}</td>
+                            <td>{% if v.patrol_name == "АДМИНИСТРАТОР" %}<span class="badge badge-red">Администратор</span>{% else %}{{ v.patrol_name }}{% endif %}</td>
                             <td>
                                 {{ v.student_name }}
                                 {% if v.student_name in repeat_names %}
-                                <span class="badge badge-darkred">⚠️ рецидивист</span>
+                                <span class="badge badge-darkred">Рецидивист</span>
                                 {% endif %}
                             </td>
                             <td><span class="badge badge-blue">{{ v.student_group }}</span></td>
                             <td><span class="{{ get_badge_class(v.violation_type) }}">{{ v.violation_type }}</span></td>
                             <td>{{ v.comment or "—" }}</td>
                             <td style="white-space: nowrap;">
-                                <a href="/admin/edit/{{ v.id }}" class="btn btn-secondary btn-sm" title="Редактировать">✏️</a>
+                                <a href="/admin/edit/{{ v.id }}" class="btn btn-secondary btn-sm" title="Редактировать">Правка</a>
                                 <form style="display: inline;" action="/admin/delete/{{ v.id }}" method="POST" onsubmit="return confirm('Удалить запись?');">
-                                    <button type="submit" class="btn btn-danger btn-sm" title="Удалить">🗑</button>
+                                    <button type="submit" class="btn btn-danger btn-sm" title="Удалить">Удалить</button>
                                 </form>
                             </td>
                         </tr>
@@ -103,7 +106,7 @@
                         <tr>
                             <td colspan="8">
                                 <div class="empty-state">
-                                    <div class="empty-state-icon">📭</div>
+                                    <div class="empty-state-icon">∅</div>
                                     <div class="empty-state-text">Нарушения не найдены</div>
                                 </div>
                             </td>
@@ -115,7 +118,7 @@
             {% if pages > 1 %}
             <div class="pagination">
                 {% if prev_url %}<a href="{{ prev_url }}" class="btn btn-secondary">← Назад</a>{% endif %}
-                <span class="page-info">Стр. {{ page }} из {{ pages }}</span>
+                <span class="page-info">СТР. {{ page }} ИЗ {{ pages }}</span>
                 {% if next_url %}<a href="{{ next_url }}" class="btn btn-secondary">Вперёд →</a>{% endif %}
             </div>
             {% endif %}
