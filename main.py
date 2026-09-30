@@ -1,8 +1,11 @@
 import csv
+import hashlib
+import hmac
 import io
 import json
 import os
 import sqlite3
+import time
 import urllib.parse
 from collections import Counter
 from datetime import datetime, timedelta
@@ -16,18 +19,23 @@ from fastapi.templating import Jinja2Templates
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # ---------------------------------------------------------------------------
-# Конфигурация
+# Конфигурация (секреты читаются из переменных окружения Railway)
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
+
+SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
+PATROL_PIN = os.environ.get("PATROL_PIN", "1234")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "1029384756")
+ADMIN_LABEL = "АДМИНИСТРАТОР"
 
 DEFAULT_PATROL_NAMES = [
     "Борисов",
     "Соколов",
     "Ипполитов",
     "Старовойтов",
-    "Алёшин",
+    "Алешин",
     "Иванов",
     "Нилов",
     "Дрейден",
@@ -35,11 +43,17 @@ DEFAULT_PATROL_NAMES = [
     "Халин",
     "Позднякова",
     "Глущенко",
+    "Малькин",
+    "Макарова",
+    "Соболев",
+    "Сахно",
+    "Сорокин",
+    "Барболина",
+    "Зиновьева",
+    "Метлёнкина",
+    "Павловская",
+    "Григорьева",
 ]
-
-PATROL_PIN = "1234"
-ADMIN_PASSWORD = "1029384756"
-ADMIN_LABEL = "АДМИНИСТРАТОР"
 
 VIOLATION_TYPES = [
     "Опоздание",
@@ -78,6 +92,17 @@ SORTABLE_COLUMNS = ["id", "created_at", "patrol_name", "student_name", "student_
 app = FastAPI(title="Патрульная служба колледжа")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+# ---------------------------------------------------------------------------
+# Защитные HTTP-заголовки на всех ответах
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 # ---------------------------------------------------------------------------
 # База данных
@@ -131,7 +156,6 @@ def init_db() -> None:
         )
         """
     )
-    # Автоматическое переименование старого типа нарушения в новый
     conn.execute(
         "UPDATE violations SET violation_type = ? WHERE violation_type = ?",
         ("Нарушение лок. акта №36", "Отсутствие формы / бейджа"),
@@ -179,10 +203,48 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 # ---------------------------------------------------------------------------
+# Защита: подписи cookie и ограничение попыток входа
+# ---------------------------------------------------------------------------
+def sign_value(value: str) -> str:
+    sig = hmac.new(SECRET_KEY.encode(), value.encode(), hashlib.sha256).hexdigest()[:32]
+    return f"{value}.{sig}"
+
+def verify_signed(raw: Optional[str]) -> Optional[str]:
+    if not raw or "." not in raw:
+        return None
+    value, sig = raw.rsplit(".", 1)
+    expected = hmac.new(SECRET_KEY.encode(), value.encode(), hashlib.sha256).hexdigest()[:32]
+    if hmac.compare_digest(sig, expected):
+        return value
+    return None
+
+LOGIN_ATTEMPTS: dict = {}
+RATE_LIMIT_WINDOW = 600  # 10 минут
+RATE_LIMIT_MAX = 5
+
+def get_client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def rate_limited(ip: str) -> bool:
+    now = time.time()
+    hits = [t for t in LOGIN_ATTEMPTS.get(ip, []) if now - t < RATE_LIMIT_WINDOW]
+    LOGIN_ATTEMPTS[ip] = hits
+    return len(hits) >= RATE_LIMIT_MAX
+
+def register_fail(ip: str) -> None:
+    LOGIN_ATTEMPTS.setdefault(ip, []).append(time.time())
+
+def clear_fails(ip: str) -> None:
+    LOGIN_ATTEMPTS.pop(ip, None)
+
+# ---------------------------------------------------------------------------
 # Вспомогательные функции
 # ---------------------------------------------------------------------------
 def is_admin(request: Request) -> bool:
-    return request.cookies.get(COOKIE_AUTH_ROLE) == "admin"
+    return verify_signed(request.cookies.get(COOKIE_AUTH_ROLE)) == "admin"
 
 def get_patrol_names():
     conn = get_db_connection()
@@ -191,10 +253,10 @@ def get_patrol_names():
     return [r["name"] for r in rows]
 
 def get_patrol_name(request: Request) -> Optional[str]:
-    raw_name = request.cookies.get(COOKIE_PATROL_NAME)
-    if not raw_name:
+    verified = verify_signed(request.cookies.get(COOKIE_PATROL_NAME))
+    if not verified:
         return None
-    name = urllib.parse.unquote(raw_name)
+    name = urllib.parse.unquote(verified)
     if name in get_patrol_names():
         return name
     return None
@@ -300,8 +362,21 @@ def patrol_login(
     patrol_name: str = Form(...),
     pin: str = Form(...),
 ):
+    ip = get_client_ip(request)
     names = get_patrol_names()
+    if rate_limited(ip):
+        return templates.TemplateResponse(
+            "patrol.html",
+            {
+                "request": request,
+                "logged_in": False,
+                "patrol_names": names,
+                "error": "Слишком много попыток входа. Повторите через 10 минут.",
+            },
+            status_code=429,
+        )
     if patrol_name not in names or pin != PATROL_PIN:
+        register_fail(ip)
         return templates.TemplateResponse(
             "patrol.html",
             {
@@ -312,13 +387,15 @@ def patrol_login(
             },
             status_code=400,
         )
+    clear_fails(ip)
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(
         key=COOKIE_PATROL_NAME,
-        value=urllib.parse.quote(patrol_name),
+        value=sign_value(urllib.parse.quote(patrol_name)),
         max_age=COOKIE_MAX_AGE_30_DAYS,
         httponly=True,
         samesite="lax",
+        secure=True,
     )
     return response
 
@@ -445,18 +522,28 @@ def admin_login_form(request: Request):
 
 @app.post("/login")
 def admin_login(request: Request, password: str = Form(...)):
+    ip = get_client_ip(request)
+    if rate_limited(ip):
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Слишком много попыток входа. Повторите через 10 минут."},
+            status_code=429,
+        )
     if password != ADMIN_PASSWORD:
+        register_fail(ip)
         return templates.TemplateResponse(
             "login.html",
             {"request": request, "error": "Неверный пароль. Попробуйте ещё раз."},
             status_code=400,
         )
+    clear_fails(ip)
     response = RedirectResponse(url="/admin", status_code=303)
     response.set_cookie(
         key=COOKIE_AUTH_ROLE,
-        value="admin",
+        value=sign_value("admin"),
         httponly=True,
         samesite="lax",
+        secure=True,
     )
     return response
 
@@ -778,6 +865,51 @@ def admin_shifts_page(request: Request):
             "recent": recent,
             "format_duration": format_duration,
         },
+    )
+
+@app.get("/admin/deviants", response_class=HTMLResponse)
+def admin_deviants(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    conn = get_db_connection()
+    rows = conn.execute(
+        """
+        SELECT student_name, COUNT(*) AS c, MAX(created_at) AS last_date
+        FROM violations
+        GROUP BY student_name
+        HAVING COUNT(*) >= 2
+        ORDER BY c DESC, student_name
+        """
+    ).fetchall()
+    names = [r["student_name"] for r in rows]
+    details = {}
+    if names:
+        placeholders = ",".join("?" * len(names))
+        drows = conn.execute(
+            f"SELECT student_name, student_group, violation_type FROM violations WHERE student_name IN ({placeholders})",
+            names,
+        ).fetchall()
+        for d in drows:
+            det = details.setdefault(d["student_name"], {"groups": set(), "types": Counter()})
+            det["groups"].add(d["student_group"])
+            det["types"][d["violation_type"]] += 1
+    conn.close()
+    deviants = []
+    for r in rows:
+        det = details.get(r["student_name"], {"groups": set(), "types": Counter()})
+        top = det["types"].most_common(1)
+        deviants.append(
+            {
+                "name": r["student_name"],
+                "count": r["c"],
+                "last_date": r["last_date"],
+                "groups": ", ".join(sorted(det["groups"])),
+                "top_type": top[0][0] if top else "",
+            }
+        )
+    return templates.TemplateResponse(
+        "deviants.html",
+        {"request": request, "deviants": deviants, "total": len(deviants), "get_badge_class": get_badge_class},
     )
 
 @app.get("/admin/report", response_class=HTMLResponse)
