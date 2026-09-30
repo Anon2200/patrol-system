@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Девианты — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Контингент: девианты</span></div>
+            </div>
+            <div class="nav-links">
+                <span class="badge badge-darkred">Порог: 2 и более нарушений</span>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-title">Список девиантов · {{ total }}</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ФИО студента</th>
+                            <th>Нарушений</th>
+                            <th>Группы</th>
+                            <th>Преобладающий тип</th>
+                            <th>Последнее нарушение</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in deviants %}
+                        <tr>
+                            <td><strong>{{ d.name }}</strong> <span class="badge badge-darkred">Девиант</span></td>
+                            <td><span class="badge badge-red">{{ d.count }}</span></td>
+                            <td class="mono">{{ d.groups }}</td>
+                            <td><span class="{{ get_badge_class(d.top_type) }}">{{ d.top_type }}</span></td>
+                            <td class="mono">{{ d.last_date }}</td>
+                            <td><a class="btn btn-secondary btn-sm" href="/admin?student_name={{ d.name | urlencode }}">Досье</a></td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">∅</div>
+                                    <div class="empty-state-text">Девиантов не выявлено</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
