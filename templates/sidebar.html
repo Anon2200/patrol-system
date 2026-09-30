@@ -18,10 +18,11 @@
             </div>
         </div>
 
-        <div class="sidebar-group {% if request.url.path in ['/stats', '/admin/report'] %}open{% endif %}">
+        <div class="sidebar-group {% if request.url.path in ['/stats', '/admin/report', '/admin/deviants'] %}open{% endif %}">
             <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Аналитика <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
                 <a href="/stats" class="sidebar-sublink {% if request.url.path == '/stats' %}active{% endif %}">Статистика и графики</a>
+                <a href="/admin/deviants" class="sidebar-sublink {% if request.url.path == '/admin/deviants' %}active{% endif %}">Девианты</a>
                 <a href="/admin/report" class="sidebar-sublink {% if request.url.path == '/admin/report' %}active{% endif %}">Отчёт за период</a>
             </div>
         </div>
