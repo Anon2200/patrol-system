@@ -1000,7 +1000,7 @@ def admin_export(
     )
 
 # ---------------------------------------------------------------------------
-# Статистика (дашборд)
+# Статистика (расширенный дашборд)
 # ---------------------------------------------------------------------------
 @app.get("/stats", response_class=HTMLResponse)
 def stats_page(request: Request):
@@ -1015,20 +1015,34 @@ def stats_page(request: Request):
     today_str = now.strftime("%Y-%m-%d")
     week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
     month_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    this_monday = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
+    last_monday = (now - timedelta(days=now.weekday() + 7)).strftime("%Y-%m-%d")
 
     days = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(13, -1, -1)]
+    heat_days = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(179, -1, -1)]
     by_day = {d: 0 for d in days}
+    heat = {d: 0 for d in heat_days}
     by_type = Counter()
     by_group = Counter()
     by_patrol = Counter()
+    by_weekday = Counter()
+    by_hour = Counter()
+    by_dept = Counter()
+    by_student = Counter()
+    student_info = {}
+    weekday_history = {}
 
     total = len(rows)
     today_count = 0
     week_count = 0
     month_count = 0
+    this_week_count = 0
+    last_week_count = 0
 
     for row in rows:
         day = row["created_at"][:10]
+        dt = datetime.strptime(day, "%Y-%m-%d")
+        wd = dt.weekday()
         if day == today_str:
             today_count += 1
         if day >= week_ago:
@@ -1037,12 +1051,63 @@ def stats_page(request: Request):
             month_count += 1
         if day in by_day:
             by_day[day] += 1
+        if day in heat:
+            heat[day] += 1
+        if day >= this_monday:
+            this_week_count += 1
+        elif day >= last_monday:
+            last_week_count += 1
+        by_weekday[wd] += 1
+        try:
+            by_hour[int(row["created_at"][11:13])] += 1
+        except (ValueError, IndexError):
+            pass
+        dept = next((k for k in DEPARTMENTS if row["student_group"].upper().startswith(k)), "other")
+        by_dept[dept] += 1
         by_type[row["violation_type"]] += 1
         by_group[row["student_group"]] += 1
         by_patrol[row["patrol_name"]] += 1
+        by_student[row["student_name"]] += 1
+        info = student_info.setdefault(row["student_name"], {"groups": set(), "last": day})
+        info["groups"].add(row["student_group"])
+        if day > info["last"]:
+            info["last"] = day
+        rec = weekday_history.setdefault(wd, {"days": set(), "count": 0, "groups": Counter(), "types": Counter()})
+        rec["days"].add(day)
+        rec["count"] += 1
+        rec["groups"][row["student_group"]] += 1
+        rec["types"][row["violation_type"]] += 1
 
+    if last_week_count > 0:
+        week_delta = round((this_week_count - last_week_count) / last_week_count * 100)
+    else:
+        week_delta = None
+
+    hours = list(range(7, 21))
     top_groups = by_group.most_common(5)
+    top_students = []
+    for name, c in by_student.most_common(10):
+        info = student_info[name]
+        top_students.append(
+            {
+                "name": name,
+                "count": c,
+                "groups": ", ".join(sorted(info["groups"])),
+                "last": info["last"],
+            }
+        )
 
+    cur_wd = now.weekday()
+    rec = weekday_history.get(cur_wd)
+    risk_predicted = 0
+    risk_group = ""
+    risk_type = ""
+    if rec and rec["days"]:
+        risk_predicted = round(rec["count"] / len(rec["days"]))
+        risk_group = rec["groups"].most_common(1)[0][0] if rec["groups"] else ""
+        risk_type = rec["types"].most_common(1)[0][0] if rec["types"] else ""
+
+    dept_keys = list(DEPARTMENTS.keys()) + ["other"]
     chart_data = {
         "days_labels": [d[5:] for d in days],
         "days_counts": [by_day[d] for d in days],
@@ -1050,6 +1115,13 @@ def stats_page(request: Request):
         "type_counts": list(by_type.values()),
         "group_labels": [g for g, _ in top_groups],
         "group_counts": [c for _, c in top_groups],
+        "weekday_labels": ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"],
+        "weekday_counts": [by_weekday.get(i, 0) for i in range(7)],
+        "hour_labels": [str(h) for h in hours],
+        "hour_counts": [by_hour.get(h, 0) for h in hours],
+        "dept_labels": [DEPARTMENTS.get(k, k) for k in dept_keys],
+        "dept_counts": [by_dept.get(k, 0) for k in dept_keys],
+        "heat": [{"d": d, "c": heat[d]} for d in heat_days],
     }
 
     return templates.TemplateResponse(
@@ -1060,7 +1132,16 @@ def stats_page(request: Request):
             "today_count": today_count,
             "week_count": week_count,
             "month_count": month_count,
+            "this_week_count": this_week_count,
+            "last_week_count": last_week_count,
+            "week_delta": week_delta,
             "top_patrols": by_patrol.most_common(),
+            "top_students": top_students,
+            "risk_weekday": ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"][cur_wd],
+            "risk_predicted": risk_predicted,
+            "risk_group": risk_group,
+            "risk_type": risk_type,
+            "get_badge_class": get_badge_class,
             "chart_data_json": json.dumps(chart_data, ensure_ascii=False),
         },
     )
