@@ -7,6 +7,11 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/app.js"></script>
+    <style>
+        .heat-wrap { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 14px); gap: 3px; overflow-x: auto; padding-bottom: 6px; }
+        .heat-cell { width: 14px; height: 14px; border-radius: 2px; background: var(--panel2); }
+        .heat-legend { display: flex; gap: 4px; align-items: center; justify-content: flex-end; font-size: 10px; color: var(--muted); margin-top: 8px; letter-spacing: 0.1em; text-transform: uppercase; }
+    </style>
 </head>
 <body>
     {% include "sidebar.html" %}
@@ -31,11 +36,22 @@
             </div>
             <div class="stat-card">
                 <div class="stat-icon">// 03</div>
+                <div class="stat-number">{{ this_week_count }}</div>
+                <div class="stat-label">
+                    Эта неделя ·
+                    {% if week_delta is none %}<span class="badge badge-gray">нет данных за прошлую</span>
+                    {% elif week_delta > 0 %}<span class="badge badge-red">↑ +{{ week_delta }}%</span>
+                    {% elif week_delta < 0 %}<span class="badge badge-green">↓ {{ week_delta }}%</span>
+                    {% else %}<span class="badge badge-gray">= 0%</span>{% endif %}
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// 04</div>
                 <div class="stat-number">{{ week_count }}</div>
                 <div class="stat-label">За 7 дней</div>
             </div>
             <div class="stat-card">
-                <div class="stat-icon">// 04</div>
+                <div class="stat-icon">// 05</div>
                 <div class="stat-number">{{ month_count }}</div>
                 <div class="stat-label">За 30 дней</div>
             </div>
@@ -43,16 +59,89 @@
 
         <div class="charts-grid">
             <div class="chart-card">
+                <div class="chart-title">Риск дня · прогноз</div>
+                <p style="font-size: 14px; line-height: 1.8;">
+                    Сегодня <strong>{{ risk_weekday }}</strong>.<br>
+                    Прогноз: <strong class="mono" style="color: var(--accent);">~{{ risk_predicted }}</strong> нарушений.
+                    {% if risk_group %}<br>Группа риска: <span class="badge badge-blue">{{ risk_group }}</span>{% endif %}
+                    {% if risk_type %}<br>Типичное нарушение: <span class="{{ get_badge_class(risk_type) }}">{{ risk_type }}</span>{% endif %}
+                    {% if not risk_group %}<br>Пока недостаточно данных для прогноза.{% endif %}
+                </p>
+            </div>
+            <div class="chart-card">
                 <div class="chart-title">Нарушения по дням · последние 14 дней</div>
                 <div class="vbars" id="barsDay"></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">По дням недели</div>
+                <div class="vbars" id="barsWeekday"></div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">По часам (07:00–20:00)</div>
+                <div class="vbars" id="barsHour"></div>
             </div>
             <div class="chart-card">
                 <div class="chart-title">По типам нарушений</div>
                 <div id="barsType"></div>
             </div>
             <div class="chart-card">
+                <div class="chart-title">По отделениям</div>
+                <div id="barsDept"></div>
+            </div>
+            <div class="chart-card">
                 <div class="chart-title">Топ-5 групп по нарушениям</div>
                 <div id="barsGroups"></div>
+            </div>
+            <div class="chart-card" style="grid-column: 1 / -1;">
+                <div class="chart-title">Календарь активности · 180 дней</div>
+                <div class="heat-wrap" id="heatMap"></div>
+                <div class="heat-legend">
+                    меньше
+                    <span class="heat-cell"></span>
+                    <span class="heat-cell" style="background: rgba(200,162,74,0.25);"></span>
+                    <span class="heat-cell" style="background: rgba(200,162,74,0.45);"></span>
+                    <span class="heat-cell" style="background: rgba(200,162,74,0.65);"></span>
+                    <span class="heat-cell" style="background: rgba(200,162,74,0.9);"></span>
+                    больше
+                </div>
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom: 20px;">
+            <div class="table-header">
+                <div class="table-title">Топ-10 студентов по нарушениям</div>
+                <a href="/admin/deviants" class="btn btn-secondary">Все девианты</a>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ФИО студента</th>
+                            <th>Нарушений</th>
+                            <th>Группы</th>
+                            <th>Последнее нарушение</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in top_students %}
+                        <tr>
+                            <td><strong>{{ s.name }}</strong> {% if s.count >= 2 %}<span class="badge badge-darkred">Девиант</span>{% endif %}</td>
+                            <td><span class="badge badge-red">{{ s.count }}</span></td>
+                            <td class="mono">{{ s.groups }}</td>
+                            <td class="mono">{{ s.last }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">∅</div>
+                                    <div class="empty-state-text">Данных пока нет</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -92,17 +181,20 @@
 
     <script>
         const data = {{ chart_data_json | safe }};
+        const BRASS = 'repeating-linear-gradient(45deg, #c8a24a, #c8a24a 6px, rgba(200,162,74,0.55) 6px, rgba(200,162,74,0.55) 12px)';
         const COLORS = [
-            'repeating-linear-gradient(45deg, #c8a24a, #c8a24a 6px, rgba(200,162,74,0.55) 6px, rgba(200,162,74,0.55) 12px)',
+            BRASS,
             'repeating-linear-gradient(45deg, #6fa0c8, #6fa0c8 6px, rgba(111,160,200,0.55) 6px, rgba(111,160,200,0.55) 12px)',
             'repeating-linear-gradient(45deg, #d05353, #d05353 6px, rgba(208,83,83,0.55) 6px, rgba(208,83,83,0.55) 12px)',
             'repeating-linear-gradient(45deg, #5fae7f, #5fae7f 6px, rgba(95,174,127,0.55) 6px, rgba(95,174,127,0.55) 12px)',
             'repeating-linear-gradient(45deg, #8593a2, #8593a2 6px, rgba(133,147,162,0.55) 6px, rgba(133,147,162,0.55) 12px)'
         ];
+        const EMPTY = '<div class="empty-state"><div class="empty-state-icon">∅</div><div class="empty-state-text">Данных пока нет</div></div>';
 
         function renderVerticalBars(id, labels, counts) {
             const el = document.getElementById(id);
-            if (!labels.length) { el.outerHTML = '<div class="empty-state"><div class="empty-state-icon">∅</div><div class="empty-state-text">Данных пока нет</div></div>'; return; }
+            if (!el) return;
+            if (!labels.length) { el.outerHTML = EMPTY; return; }
             const max = Math.max(...counts, 1);
             el.innerHTML = labels.map((label, i) =>
                 '<div class="vbar-col">' +
@@ -115,7 +207,8 @@
 
         function renderHorizontalBars(id, labels, counts, colors) {
             const el = document.getElementById(id);
-            if (!labels.length) { el.outerHTML = '<div class="empty-state"><div class="empty-state-icon">∅</div><div class="empty-state-text">Данных пока нет</div></div>'; return; }
+            if (!el) return;
+            if (!labels.length) { el.outerHTML = EMPTY; return; }
             const max = Math.max(...counts, 1);
             el.innerHTML = labels.map((label, i) => {
                 const color = Array.isArray(colors) ? colors[i % colors.length] : colors;
@@ -128,10 +221,25 @@
         }
 
         renderVerticalBars('barsDay', data.days_labels, data.days_counts);
+        renderVerticalBars('barsWeekday', data.weekday_labels, data.weekday_counts);
+        renderVerticalBars('barsHour', data.hour_labels, data.hour_counts);
         renderHorizontalBars('barsType', data.type_labels, data.type_counts, COLORS);
-        renderHorizontalBars('barsGroups', data.group_labels, data.group_counts, [
-            'repeating-linear-gradient(45deg, #c8a24a, #c8a24a 6px, rgba(200,162,74,0.55) 6px, rgba(200,162,74,0.55) 12px)'
-        ]);
+        renderHorizontalBars('barsDept', data.dept_labels, data.dept_counts, COLORS);
+        renderHorizontalBars('barsGroups', data.group_labels, data.group_counts, [BRASS]);
+
+        const heatEl = document.getElementById('heatMap');
+        if (heatEl && data.heat) {
+            const max = Math.max(...data.heat.map(h => h.c), 1);
+            heatEl.innerHTML = data.heat.map(h => {
+                let bg = 'var(--panel2)';
+                if (h.c > 0) {
+                    const t = h.c / max;
+                    const a = t <= 0.25 ? 0.25 : t <= 0.5 ? 0.45 : t <= 0.75 ? 0.65 : 0.9;
+                    bg = 'rgba(200,162,74,' + a + ')';
+                }
+                return '<div class="heat-cell" style="background:' + bg + ';" title="' + h.d + ': ' + h.c + '"></div>';
+            }).join('');
+        }
     </script>
 </body>
 </html>
