@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
 
-APP_VERSION = "4.3 (встроенная справка)"
+APP_VERSION = "4.4 (отдельный вход разработчика)"
 START_TIME = datetime.now()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
@@ -823,7 +823,7 @@ def help_page(request: Request):
     )
 
 # ---------------------------------------------------------------------------
-# Вход администратора и разработчика
+# Вход администратора и отдельный вход разработчика
 # ---------------------------------------------------------------------------
 @app.get("/login", response_class=HTMLResponse)
 def admin_login_form(request: Request):
@@ -843,16 +843,18 @@ def admin_login(request: Request, password: str = Form(...)):
             {"request": request, "error": "Слишком много попыток входа. Повторите через 10 минут."},
             status_code=429,
         )
-    if password == get_dev_password():
-        role = "dev"
-    elif password == get_admin_password():
+    if password == get_admin_password():
         role = "admin"
     else:
         register_fail(ip)
         log_action(request, "вход в админку: отказ", f"IP {ip}")
+        if password == get_dev_password():
+            error = "Это пароль разработчика. Используйте служебный вход разработчика."
+        else:
+            error = "Неверный пароль. Попробуйте ещё раз."
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "error": "Неверный пароль. Попробуйте ещё раз."},
+            {"request": request, "error": error},
             status_code=400,
         )
     clear_fails(ip)
@@ -861,6 +863,44 @@ def admin_login(request: Request, password: str = Form(...)):
     response.set_cookie(
         key=COOKIE_AUTH_ROLE,
         value=sign_value(role),
+        httponly=True,
+        samesite="lax",
+        secure=True,
+    )
+    return response
+
+@app.get("/dev/login", response_class=HTMLResponse)
+def dev_login_form(request: Request):
+    if is_dev(request):
+        return RedirectResponse(url="/admin", status_code=303)
+    return templates.TemplateResponse(
+        "dev_login.html",
+        {"request": request, "error": None},
+    )
+
+@app.post("/dev/login")
+def dev_login(request: Request, password: str = Form(...)):
+    ip = get_client_ip(request)
+    if rate_limited(ip):
+        return templates.TemplateResponse(
+            "dev_login.html",
+            {"request": request, "error": "Слишком много попыток входа. Повторите через 10 минут."},
+            status_code=429,
+        )
+    if password != get_dev_password():
+        register_fail(ip)
+        log_action(request, "вход разработчика: отказ", f"IP {ip}")
+        return templates.TemplateResponse(
+            "dev_login.html",
+            {"request": request, "error": "Неверный пароль разработчика."},
+            status_code=400,
+        )
+    clear_fails(ip)
+    log_action(request, "вход разработчика", f"IP {ip}")
+    response = RedirectResponse(url="/admin", status_code=303)
+    response.set_cookie(
+        key=COOKIE_AUTH_ROLE,
+        value=sign_value("dev"),
         httponly=True,
         samesite="lax",
         secure=True,
@@ -879,7 +919,7 @@ def admin_logout():
 @app.get("/dev/system", response_class=HTMLResponse)
 def dev_system(request: Request):
     if not is_dev(request):
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url="/dev/login", status_code=303)
     conn = get_db_connection()
     counts = {
         "violations": conn.execute("SELECT COUNT(*) FROM violations WHERE deleted_at IS NULL").fetchone()[0],
@@ -905,6 +945,8 @@ def dev_system(request: Request):
         warnings.append("SECRET_KEY не задан в переменных окружения: используется значение по умолчанию.")
     if get_dev_password() == DEV_PASSWORD and DEV_PASSWORD == "developer":
         warnings.append("Пароль разработчика не изменён: задайте переменную DEV_PASSWORD или смените его в meta.")
+    if get_dev_password() == get_admin_password():
+        warnings.append("Пароли разработчика и администратора совпадают: задайте разные значения.")
     if not get_meta("session_salt"):
         warnings.append("Соль сессий не инициализирована: выполните сброс сессий на странице «Резерв и сессии».")
 
@@ -931,7 +973,7 @@ def dev_system(request: Request):
 @app.get("/dev/errors", response_class=HTMLResponse)
 def dev_errors(request: Request):
     if not is_dev(request):
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url="/dev/login", status_code=303)
     conn = get_db_connection()
     rows = conn.execute("SELECT * FROM error_log ORDER BY id DESC LIMIT 100").fetchall()
     conn.close()
@@ -943,7 +985,7 @@ def dev_errors(request: Request):
 @app.post("/dev/errors/clear")
 def dev_errors_clear(request: Request):
     if not is_dev(request):
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url="/dev/login", status_code=303)
     conn = get_db_connection()
     conn.execute("DELETE FROM error_log")
     conn.commit()
@@ -954,7 +996,7 @@ def dev_errors_clear(request: Request):
 @app.get("/dev/tools", response_class=HTMLResponse)
 def dev_tools(request: Request):
     if not is_dev(request):
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url="/dev/login", status_code=303)
     return templates.TemplateResponse(
         "dev_tools.html",
         {
@@ -966,7 +1008,7 @@ def dev_tools(request: Request):
 @app.get("/dev/backup")
 def dev_backup(request: Request):
     if not is_dev(request):
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url="/dev/login", status_code=303)
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
     tmp.close()
     src = get_db_connection()
@@ -987,7 +1029,7 @@ def dev_backup(request: Request):
 @app.post("/dev/restore-db")
 async def dev_restore_db(request: Request, file: UploadFile = File(...)):
     if not is_dev(request):
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url="/dev/login", status_code=303)
     data = await file.read()
     if not data.startswith(b"SQLite format 3\x00"):
         return toast_redirect("/dev/tools", "Файл не является базой данных SQLite")
@@ -1016,10 +1058,10 @@ async def dev_restore_db(request: Request, file: UploadFile = File(...)):
 @app.post("/dev/reset-sessions")
 def dev_reset_sessions(request: Request):
     if not is_dev(request):
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url="/dev/login", status_code=303)
     set_meta("session_salt", secrets.token_hex(16))
     log_action(request, "экстренный сброс всех сессий")
-    return RedirectResponse(url="/login", status_code=303)
+    return RedirectResponse(url="/dev/login", status_code=303)
 
 # ---------------------------------------------------------------------------
 # Админ-панель
@@ -2000,7 +2042,7 @@ def stats_page(request: Request):
     )
 
 # ---------------------------------------------------------------------------
-# Волна 3: оперативный монитор «Штаб»
+# Оперативный монитор «Штаб»
 # ---------------------------------------------------------------------------
 @app.get("/hq", response_class=HTMLResponse)
 def hq_page(request: Request):
