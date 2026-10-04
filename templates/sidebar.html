@@ -10,7 +10,7 @@
     </div>
 
     <nav class="sidebar-nav">
-        <div class="sidebar-group {% if request.url.path in ['/admin', '/admin/add'] %}open{% endif %}">
+        <div class="sidebar-group {% if request.url.path in ['/admin', '/admin/add', '/admin/trash'] %}open{% endif %}">
             <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Нарушения <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
                 <a href="/admin" class="sidebar-sublink {% if request.url.path == '/admin' %}active{% endif %}">Список и фильтры</a>
@@ -19,10 +19,11 @@
             </div>
         </div>
 
-        <div class="sidebar-group {% if request.url.path in ['/stats', '/admin/report', '/admin/deviants'] %}open{% endif %}">
+        <div class="sidebar-group {% if request.url.path in ['/stats', '/admin/report', '/admin/deviants', '/hq'] %}open{% endif %}">
             <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Аналитика <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
                 <a href="/stats" class="sidebar-sublink {% if request.url.path == '/stats' %}active{% endif %}">Статистика и графики</a>
+                <a href="/hq" class="sidebar-sublink {% if request.url.path == '/hq' %}active{% endif %}">Экран «Штаб»</a>
                 <a href="/admin/deviants" class="sidebar-sublink {% if request.url.path == '/admin/deviants' %}active{% endif %}">Девианты</a>
                 <a href="/admin/report" class="sidebar-sublink {% if request.url.path == '/admin/report' %}active{% endif %}">Отчёт за период</a>
             </div>
@@ -37,12 +38,13 @@
             </div>
         </div>
 
-        <div class="sidebar-group {% if request.url.path in ['/admin/settings', '/admin/quality', '/admin/audit'] %}open{% endif %}">
+        <div class="sidebar-group {% if request.url.path in ['/admin/settings', '/admin/quality', '/admin/audit', '/help'] %}open{% endif %}">
             <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Система <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
                 <a href="/admin/settings" class="sidebar-sublink {% if request.url.path == '/admin/settings' %}active{% endif %}">Настройки</a>
                 <a href="/admin/quality" class="sidebar-sublink {% if request.url.path == '/admin/quality' %}active{% endif %}">Качество данных</a>
                 <a href="/admin/audit" class="sidebar-sublink {% if request.url.path == '/admin/audit' %}active{% endif %}">Журнал операций</a>
+                <a href="/help" class="sidebar-sublink {% if request.url.path == '/help' %}active{% endif %}">Справка</a>
             </div>
         </div>
 
