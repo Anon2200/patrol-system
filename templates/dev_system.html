@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Паспорт системы</span></div>
+            </div>
+            <div class="nav-links">
+                <span class="badge badge-darkred">Доступ: разработчик</span>
+            </div>
+        </div>
+
+        {% for w in warnings %}
+        <div class="alert alert-error">{{ w }}</div>
+        {% endfor %}
+
+        <div class="stats-grid" style="margin-bottom: 20px;">
+            <div class="stat-card">
+                <div class="stat-icon">// ВЕРСИЯ</div>
+                <div class="stat-number" style="font-size: 18px;">{{ version }}</div>
+                <div class="stat-label">Приложение</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// АПТАЙМ</div>
+                <div class="stat-number" style="font-size: 18px;">{{ uptime }}</div>
+                <div class="stat-label">Непрерывная работа</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// БАЗА</div>
+                <div class="stat-number" style="font-size: 18px;">{{ db_size }}</div>
+                <div class="stat-label">Размер файла БД</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// ОШИБКИ</div>
+                <div class="stat-number">{{ counts.error_log }}</div>
+                <div class="stat-label">В журнале ошибок</div>
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom: 20px;">
+            <div class="table-header">
+                <div class="table-title">Счётчики таблиц</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <tbody>
+                        <tr><td>violations · нарушения</td><td class="mono">{{ counts.violations }}</td></tr>
+                        <tr><td>patrol_members · состав патруля</td><td class="mono">{{ counts.patrol_members }}</td></tr>
+                        <tr><td>duty_schedule · график дежурств</td><td class="mono">{{ counts.duty_schedule }}</td></tr>
+                        <tr><td>shifts · смены</td><td class="mono">{{ counts.shifts }}</td></tr>
+                        <tr><td>error_log · журнал ошибок</td><td class="mono">{{ counts.error_log }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom: 20px;">
+            <div class="table-header">
+                <div class="table-title">Хранилище и резервные копии</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <tbody>
+                        <tr><td>Каталог базы данных</td><td class="mono">{{ db_dir }}</td></tr>
+                        <tr><td>Запись в каталог</td><td>{% if db_writable %}<span class="badge badge-green">разрешена</span>{% else %}<span class="badge badge-red">запрещена</span>{% endif %}</td></tr>
+                        <tr><td>Последний экспорт CSV</td><td class="mono">{{ last_export }}</td></tr>
+                        <tr><td>Последний полный бэкап .db</td><td class="mono">{{ last_db_backup }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-title">Текущие справочники</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <tbody>
+                        <tr><td>Типов нарушений</td><td class="mono">{{ types_count }}</td></tr>
+                        <tr><td>Отделений</td><td class="mono">{{ deps_count }}</td></tr>
+                        <tr><td>Порог девианта</td><td class="mono">{{ deviant_min }}+</td></tr>
+                        <tr><td>Сброс девиантов</td><td class="mono">{{ deviants_reset_at }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
