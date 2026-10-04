@@ -17,12 +17,63 @@
                 <div class="page-title"><span class="status-dot"></span><span>Админ-панель</span></div>
             </div>
             <div class="nav-links">
+                {% if kpi.days_since_export is not none and kpi.days_since_export > 7 %}
+                <span class="badge badge-orange">Экспорт: {{ kpi.days_since_export }} дн. назад</span>
+                {% endif %}
                 <span class="badge badge-green">Доступ: администратор</span>
             </div>
         </div>
 
+        <!-- KPI-панель -->
+        <div class="stats-grid" style="margin-bottom: 20px;">
+            <div class="stat-card">
+                <div class="stat-icon">// СЕГОДНЯ</div>
+                <div class="stat-number">{{ kpi.today }}</div>
+                <div class="stat-label">Нарушений</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// НЕДЕЛЯ</div>
+                <div class="stat-number">{{ kpi.week }}</div>
+                <div class="stat-label">За 7 дней</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// ДЕВИАНТЫ</div>
+                <div class="stat-number">{{ kpi.deviants }}</div>
+                <div class="stat-label">Активных</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// НОВЫЕ</div>
+                <div class="stat-number">{{ kpi.new_since_visit }}</div>
+                <div class="stat-label">С последнего входа</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// СМЕНЫ</div>
+                <div class="stat-number">{{ kpi.open_shifts }}</div>
+                <div class="stat-label">Открытых сейчас</div>
+            </div>
+        </div>
+
+        {% if kpi.on_duty %}
+        <div class="alert alert-success" style="margin-bottom: 20px;">
+            Сегодня дежурят: {{ kpi.on_duty | join(', ') }}
+        </div>
+        {% endif %}
+
+        <!-- Пресеты фильтров -->
         <div class="filters-card">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
+                <a href="/admin?date_from={{ today_str }}&date_to={{ today_str }}" class="btn btn-secondary btn-sm">Сегодня</a>
+                <a href="/admin?date_from={{ monday_str }}" class="btn btn-secondary btn-sm">Эта неделя</a>
+                <a href="/admin?has_comment=1" class="btn btn-secondary btn-sm">С комментариями</a>
+                <a href="/admin/deviants" class="btn btn-secondary btn-sm">Девианты</a>
+                <a href="/admin" class="btn btn-secondary btn-sm">Сбросить</a>
+            </div>
+
             <form action="/admin" method="GET" class="filters-form">
+                <div class="form-group" style="margin: 0;">
+                    <label class="form-label" for="q">Глобальный поиск</label>
+                    <input class="form-input" type="text" id="q" name="q" value="{{ q_filter }}" placeholder="Студент, патрульный, группа, комментарий...">
+                </div>
                 <div class="form-group" style="margin: 0;">
                     <label class="form-label" for="student_name">ФИО студента</label>
                     <input class="form-input" type="text" id="student_name" name="student_name" value="{{ name_filter }}" placeholder="Поиск...">
@@ -50,26 +101,32 @@
                 </div>
                 <div class="filters-actions">
                     <button type="submit" class="btn btn-primary">Применить</button>
-                    <a href="/admin" class="btn btn-secondary">Сбросить</a>
                 </div>
             </form>
         </div>
 
+        <!-- Таблица с массовыми операциями -->
         <div class="table-card">
             <div class="table-header">
                 <div class="table-title">Список нарушений · всего: {{ total }}</div>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                    <form action="/admin/restore" method="POST" enctype="multipart/form-data" style="display: flex; gap: 8px; align-items: center;" onsubmit="return confirm('Восстановить записи из CSV-файла? Существующие дубликаты будут пропущены.');">
+                    <form id="bulkForm" method="POST" style="display: flex; gap: 8px; align-items: center;">
+                        <input type="hidden" name="ids" id="bulkIds" value="">
+                        <button type="button" class="btn btn-danger btn-sm" onclick="bulkDelete()">Удалить выбранные</button>
+                        <button type="button" class="btn btn-success btn-sm" onclick="bulkExport()">Экспорт выбранных</button>
+                    </form>
+                    <form action="/admin/restore" method="POST" enctype="multipart/form-data" style="display: flex; gap: 8px; align-items: center;">
                         <input type="file" name="file" accept=".csv" class="form-input" style="max-width: 240px; padding: 6px 10px;">
                         <button type="submit" class="btn btn-secondary">Восстановить</button>
                     </form>
-                    <a href="/admin/export?student_name={{ name_filter }}&group={{ group_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}" class="btn btn-success">Экспорт CSV</a>
+                    <a href="/admin/export?student_name={{ name_filter }}&group={{ group_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}&q={{ q_filter }}" class="btn btn-success">Экспорт CSV</a>
                 </div>
             </div>
             <div class="table-wrapper">
                 <table>
                     <thead>
                         <tr>
+                            <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
                             <th><a class="th-link" href="{{ sort_urls['id'] }}"># {% if sort == 'id' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
                             <th><a class="th-link" href="{{ sort_urls['created_at'] }}">Дата {% if sort == 'created_at' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
                             <th><a class="th-link" href="{{ sort_urls['patrol_name'] }}">Патрульный {% if sort == 'patrol_name' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
@@ -83,11 +140,12 @@
                     <tbody>
                         {% for v in violations %}
                         <tr>
+                            <td><input type="checkbox" class="row-check" value="{{ v.id }}"></td>
                             <td><strong>{{ v.id }}</strong></td>
                             <td>{{ v.created_at }}</td>
                             <td>{% if v.patrol_name == "АДМИНИСТРАТОР" %}<span class="badge badge-red">Администратор</span>{% else %}{{ v.patrol_name }}{% endif %}</td>
                             <td>
-                                {{ v.student_name }}
+                                <a href="/admin/dossier?name={{ v.student_name | urlencode }}">{{ v.student_name }}</a>
                                 {% if v.student_name in repeat_names %}
                                 <span class="badge badge-darkred">Девиант</span>
                                 {% endif %}
@@ -104,7 +162,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="8">
+                            <td colspan="9">
                                 <div class="empty-state">
                                     <div class="empty-state-icon">∅</div>
                                     <div class="empty-state-text">Нарушения не найдены</div>
@@ -126,6 +184,50 @@
     </div>
 
     <script>
+        function toggleSelectAll() {
+            const checked = document.getElementById('selectAll').checked;
+            document.querySelectorAll('.row-check').forEach(cb => cb.checked = checked);
+        }
+
+        function getSelectedIds() {
+            return Array.from(document.querySelectorAll('.row-check:checked')).map(cb => cb.value);
+        }
+
+        function bulkDelete() {
+            const ids = getSelectedIds();
+            if (!ids.length) { alert('Выберите хотя бы одну запись'); return; }
+            if (!confirm('Удалить ' + ids.length + ' записей?')) return;
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/admin/bulk/delete';
+            ids.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids';
+                input.value = id;
+                form.appendChild(input);
+            });
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function bulkExport() {
+            const ids = getSelectedIds();
+            if (!ids.length) { alert('Выберите хотя бы одну запись'); return; }
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/admin/bulk/export';
+            ids.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids';
+                input.value = id;
+                form.appendChild(input);
+            });
+            document.body.appendChild(form);
+            form.submit();
+        }
+
         const toastMsg = {{ request.query_params.get('toast') | tojson }};
         if (toastMsg) { showToast(toastMsg); }
     </script>
