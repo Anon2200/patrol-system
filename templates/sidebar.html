@@ -10,12 +10,11 @@
     </div>
 
     <nav class="sidebar-nav">
-        <div class="sidebar-group {% if request.url.path in ['/admin', '/admin/add', '/admin/trash'] %}open{% endif %}">
+        <div class="sidebar-group {% if request.url.path in ['/admin', '/admin/add'] %}open{% endif %}">
             <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Нарушения <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
                 <a href="/admin" class="sidebar-sublink {% if request.url.path == '/admin' %}active{% endif %}">Список и фильтры</a>
                 <a href="/admin/add" class="sidebar-sublink {% if request.url.path == '/admin/add' %}active{% endif %}">Добавить нарушение</a>
-                <a href="/admin/trash" class="sidebar-sublink {% if request.url.path == '/admin/trash' %}active{% endif %}">Корзина</a>
             </div>
         </div>
 
@@ -38,23 +37,24 @@
             </div>
         </div>
 
-        <div class="sidebar-group {% if request.url.path in ['/admin/settings', '/admin/quality', '/admin/audit', '/help'] %}open{% endif %}">
+        <div class="sidebar-group {% if request.url.path in ['/admin/settings', '/admin/quality', '/help'] %}open{% endif %}">
             <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Система <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
                 <a href="/admin/settings" class="sidebar-sublink {% if request.url.path == '/admin/settings' %}active{% endif %}">Настройки</a>
                 <a href="/admin/quality" class="sidebar-sublink {% if request.url.path == '/admin/quality' %}active{% endif %}">Качество данных</a>
-                <a href="/admin/audit" class="sidebar-sublink {% if request.url.path == '/admin/audit' %}active{% endif %}">Журнал операций</a>
                 <a href="/help" class="sidebar-sublink {% if request.url.path == '/help' %}active{% endif %}">Справка</a>
             </div>
         </div>
 
         {% if is_dev(request) %}
-        <div class="sidebar-group {% if request.url.path.startswith('/dev') %}open{% endif %}">
+        <div class="sidebar-group {% if request.url.path.startswith('/dev') or request.url.path in ['/admin/trash', '/admin/audit'] %}open{% endif %}">
             <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Служба <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
                 <a href="/dev/system" class="sidebar-sublink {% if request.url.path == '/dev/system' %}active{% endif %}">Система</a>
                 <a href="/dev/errors" class="sidebar-sublink {% if request.url.path == '/dev/errors' %}active{% endif %}">Журнал ошибок</a>
                 <a href="/dev/tools" class="sidebar-sublink {% if request.url.path == '/dev/tools' %}active{% endif %}">Резерв и сессии</a>
+                <a href="/admin/trash" class="sidebar-sublink {% if request.url.path == '/admin/trash' %}active{% endif %}">Корзина</a>
+                <a href="/admin/audit" class="sidebar-sublink {% if request.url.path == '/admin/audit' %}active{% endif %}">Журнал операций</a>
             </div>
         </div>
         {% endif %}
