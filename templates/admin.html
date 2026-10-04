@@ -7,6 +7,42 @@
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/app.js"></script>
+    <style>
+        .student-link { color: var(--text); text-decoration: none; border-bottom: 1px dashed var(--muted); transition: all 0.2s ease; }
+        .student-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+        input[type="checkbox"].row-check,
+        input[type="checkbox"]#selectAll {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border: 1px solid var(--line);
+            background: var(--input-bg);
+            border-radius: 2px;
+            cursor: pointer;
+            position: relative;
+            vertical-align: middle;
+            transition: all 0.15s ease;
+        }
+        input[type="checkbox"].row-check:hover,
+        input[type="checkbox"]#selectAll:hover { border-color: var(--accent); }
+        input[type="checkbox"].row-check:checked,
+        input[type="checkbox"]#selectAll:checked { background: var(--accent); border-color: var(--accent); }
+        input[type="checkbox"].row-check:checked::after,
+        input[type="checkbox"]#selectAll:checked::after {
+            content: "";
+            position: absolute;
+            left: 5px;
+            top: 1px;
+            width: 5px;
+            height: 10px;
+            border: solid var(--bg);
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+        tr.row-selected { background: rgba(200, 162, 74, 0.08) !important; }
+    </style>
 </head>
 <body>
     {% include "sidebar.html" %}
@@ -24,7 +60,6 @@
             </div>
         </div>
 
-        <!-- KPI-панель -->
         <div class="stats-grid" style="margin-bottom: 20px;">
             <div class="stat-card">
                 <div class="stat-icon">// СЕГОДНЯ</div>
@@ -59,7 +94,6 @@
         </div>
         {% endif %}
 
-        <!-- Пресеты фильтров -->
         <div class="filters-card">
             <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
                 <a href="/admin?date_from={{ today_str }}&date_to={{ today_str }}" class="btn btn-secondary btn-sm">Сегодня</a>
@@ -105,16 +139,12 @@
             </form>
         </div>
 
-        <!-- Таблица с массовыми операциями -->
         <div class="table-card">
             <div class="table-header">
                 <div class="table-title">Список нарушений · всего: {{ total }}</div>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                    <form id="bulkForm" method="POST" style="display: flex; gap: 8px; align-items: center;">
-                        <input type="hidden" name="ids" id="bulkIds" value="">
-                        <button type="button" class="btn btn-danger btn-sm" onclick="bulkDelete()">Удалить выбранные</button>
-                        <button type="button" class="btn btn-success btn-sm" onclick="bulkExport()">Экспорт выбранных</button>
-                    </form>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="bulkDelete()">Удалить выбранные</button>
+                    <button type="button" class="btn btn-success btn-sm" onclick="bulkExport()">Экспорт выбранных</button>
                     <form action="/admin/restore" method="POST" enctype="multipart/form-data" style="display: flex; gap: 8px; align-items: center;">
                         <input type="file" name="file" accept=".csv" class="form-input" style="max-width: 240px; padding: 6px 10px;">
                         <button type="submit" class="btn btn-secondary">Восстановить</button>
@@ -140,12 +170,12 @@
                     <tbody>
                         {% for v in violations %}
                         <tr>
-                            <td><input type="checkbox" class="row-check" value="{{ v.id }}"></td>
+                            <td><input type="checkbox" class="row-check" value="{{ v.id }}" onchange="rowToggled(this)"></td>
                             <td><strong>{{ v.id }}</strong></td>
                             <td>{{ v.created_at }}</td>
                             <td>{% if v.patrol_name == "АДМИНИСТРАТОР" %}<span class="badge badge-red">Администратор</span>{% else %}{{ v.patrol_name }}{% endif %}</td>
                             <td>
-                                <a href="/admin/dossier?name={{ v.student_name | urlencode }}">{{ v.student_name }}</a>
+                                <a class="student-link" href="/admin/dossier?name={{ v.student_name | urlencode }}">{{ v.student_name }}</a>
                                 {% if v.student_name in repeat_names %}
                                 <span class="badge badge-darkred">Девиант</span>
                                 {% endif %}
@@ -186,46 +216,47 @@
     <script>
         function toggleSelectAll() {
             const checked = document.getElementById('selectAll').checked;
-            document.querySelectorAll('.row-check').forEach(cb => cb.checked = checked);
+            document.querySelectorAll('.row-check').forEach(function (cb) {
+                cb.checked = checked;
+                rowToggled(cb);
+            });
+        }
+
+        function rowToggled(cb) {
+            const tr = cb.closest('tr');
+            if (tr) tr.classList.toggle('row-selected', cb.checked);
         }
 
         function getSelectedIds() {
-            return Array.from(document.querySelectorAll('.row-check:checked')).map(cb => cb.value);
+            return Array.from(document.querySelectorAll('.row-check:checked')).map(function (cb) { return cb.value; });
+        }
+
+        function submitIds(action, ids) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = action;
+            ids.forEach(function (id) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids';
+                input.value = id;
+                form.appendChild(input);
+            });
+            document.body.appendChild(form);
+            form.submit();
         }
 
         function bulkDelete() {
             const ids = getSelectedIds();
             if (!ids.length) { alert('Выберите хотя бы одну запись'); return; }
-            if (!confirm('Удалить ' + ids.length + ' записей?')) return;
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/admin/bulk/delete';
-            ids.forEach(id => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'ids';
-                input.value = id;
-                form.appendChild(input);
-            });
-            document.body.appendChild(form);
-            form.submit();
+            if (!confirm('Удалить выбранные записи: ' + ids.length + '?')) return;
+            submitIds('/admin/bulk/delete', ids);
         }
 
         function bulkExport() {
             const ids = getSelectedIds();
             if (!ids.length) { alert('Выберите хотя бы одну запись'); return; }
-            const form = document.createElement('form');
-            form.method = 'POST';
-            form.action = '/admin/bulk/export';
-            ids.forEach(id => {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'ids';
-                input.value = id;
-                form.appendChild(input);
-            });
-            document.body.appendChild(form);
-            form.submit();
+            submitIds('/admin/bulk/export', ids);
         }
 
         const toastMsg = {{ request.query_params.get('toast') | tojson }};
