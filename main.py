@@ -1174,7 +1174,7 @@ def admin_dossier(request: Request, name: str = ""):
             by_patrol = Counter(r["patrol_name"] for r in items)
             data = {
                 "name": items[0]["student_name"],
-                "items": items,
+                "records": items,
                 "total": len(items),
                 "by_type": by_type.most_common(),
                 "by_month": sorted(by_month.items()),
