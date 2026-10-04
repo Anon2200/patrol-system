@@ -35,6 +35,14 @@
                 <a href="/admin/patrol" class="sidebar-sublink {% if request.url.path == '/admin/patrol' %}active{% endif %}">Состав патруля</a>
             </div>
         </div>
+
+        <div class="sidebar-group {% if request.url.path in ['/admin/settings', '/admin/quality'] %}open{% endif %}">
+            <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Система <span class="arrow">▼</span></button>
+            <div class="sidebar-sub">
+                <a href="/admin/settings" class="sidebar-sublink {% if request.url.path == '/admin/settings' %}active{% endif %}">Настройки</a>
+                <a href="/admin/quality" class="sidebar-sublink {% if request.url.path == '/admin/quality' %}active{% endif %}">Качество данных</a>
+            </div>
+        </div>
     </nav>
 
     <div class="sidebar-footer">
