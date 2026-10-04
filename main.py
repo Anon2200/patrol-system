@@ -509,6 +509,82 @@ def add_violation(
     return toast_redirect("/", "Нарушение сохранено ✓")
 
 # ---------------------------------------------------------------------------
+# Служебные проверки: живой статус, дубль-контроль, досье студента
+# ---------------------------------------------------------------------------
+@app.get("/check/student")
+def check_student(request: Request, name: str = ""):
+    if not get_patrol_name(request) and not is_admin(request):
+        return HTMLResponse(
+            content=json.dumps({"ok": False}),
+            media_type="application/json",
+            status_code=403,
+        )
+    q = name.strip()
+    matches = []
+    if len(q) >= 3:
+        today = datetime.now().strftime("%Y-%m-%d")
+        conn = get_db_connection()
+        rows = conn.execute(
+            "SELECT student_name, COUNT(*) AS c, MAX(created_at) AS last "
+            "FROM violations GROUP BY student_name"
+        ).fetchall()
+        today_rows = conn.execute(
+            "SELECT student_name, violation_type FROM violations WHERE created_at >= ?",
+            (today + " 00:00:00",),
+        ).fetchall()
+        conn.close()
+        today_types = {}
+        for t in today_rows:
+            today_types.setdefault(t["student_name"].casefold(), set()).add(t["violation_type"])
+        ql = q.casefold()
+        for r in rows:
+            if r["student_name"].casefold().startswith(ql):
+                matches.append(
+                    {
+                        "name": r["student_name"],
+                        "count": r["c"],
+                        "last": r["last"][:10],
+                        "today_types": sorted(today_types.get(r["student_name"].casefold(), set())),
+                    }
+                )
+        matches.sort(key=lambda m: m["count"], reverse=True)
+        matches = matches[:5]
+    return HTMLResponse(
+        content=json.dumps({"ok": True, "matches": matches}, ensure_ascii=False),
+        media_type="application/json",
+    )
+
+@app.get("/check/dossier")
+def check_dossier(request: Request, name: str = ""):
+    if not get_patrol_name(request) and not is_admin(request):
+        return HTMLResponse(
+            content=json.dumps({"ok": False}),
+            media_type="application/json",
+            status_code=403,
+        )
+    q = name.strip().casefold()
+    items = []
+    if q:
+        conn = get_db_connection()
+        rows = conn.execute("SELECT * FROM violations ORDER BY created_at DESC").fetchall()
+        conn.close()
+        items = [
+            {
+                "created_at": r["created_at"],
+                "violation_type": r["violation_type"],
+                "student_group": r["student_group"],
+                "patrol_name": r["patrol_name"],
+                "comment": r["comment"] or "",
+            }
+            for r in rows
+            if r["student_name"].casefold() == q
+        ]
+    return HTMLResponse(
+        content=json.dumps({"ok": True, "items": items}, ensure_ascii=False),
+        media_type="application/json",
+    )
+
+# ---------------------------------------------------------------------------
 # Маршруты администратора
 # ---------------------------------------------------------------------------
 @app.get("/login", response_class=HTMLResponse)
