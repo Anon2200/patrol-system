@@ -13,11 +13,14 @@
     <div class="container">
         <div class="page-header">
             <div style="display: flex; align-items: center; gap: 12px;">
-                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню"></button>
                 <div class="page-title"><span>Контингент: девианты</span></div>
             </div>
             <div class="nav-links">
-                <span class="badge badge-darkred">Порог: 2 и более нарушений</span>
+                {% if reset_label %}
+                <span class="badge badge-gray">Учёт с {{ reset_label }}</span>
+                {% endif %}
+                <span class="badge badge-darkred">Порог: {{ deviant_min }}+</span>
             </div>
         </div>
 
@@ -45,7 +48,7 @@
                             <td class="mono">{{ d.groups }}</td>
                             <td><span class="{{ get_badge_class(d.top_type) }}">{{ d.top_type }}</span></td>
                             <td class="mono">{{ d.last_date }}</td>
-                            <td><a class="btn btn-secondary btn-sm" href="/admin?student_name={{ d.name | urlencode }}">Досье</a></td>
+                            <td><a class="btn btn-secondary btn-sm" href="/admin/dossier?name={{ d.name | urlencode }}">Досье</a></td>
                         </tr>
                         {% else %}
                         <tr>
