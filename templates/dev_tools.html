@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Резерв и сессии — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Резерв и сессии</span></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 12px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Полный бэкап базы</h3>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">
+                Скачивает копию файла базы целиком: нарушения, состав, график, смены, настройки.
+                Последний бэкап: <strong class="mono">{{ last_db_backup }}</strong>
+            </p>
+            <a href="/dev/backup" class="btn btn-success">Скачать копию .db</a>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 12px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Восстановление из файла .db</h3>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">
+                Перед заменой система автоматически снимает копию текущей базы.
+                Если файл повреждён, прежняя база возвращается сама.
+            </p>
+            <form action="/dev/restore-db" method="POST" enctype="multipart/form-data" style="display: flex; gap: 10px; flex-wrap: wrap;" onsubmit="return confirm('Заменить текущую базу данными из файла?');">
+                <input type="file" name="file" accept=".db" class="form-input" style="max-width: 320px; padding: 8px 10px;" required>
+                <button type="submit" class="btn btn-danger">Восстановить базу</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 12px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Экстренный сброс сессий</h3>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">
+                Все cookie патрульных, администраторов и разработчиков становятся недействительны мгновенно.
+                После сброса вы также выйдете и войдёте заново.
+            </p>
+            <form action="/dev/reset-sessions" method="POST" onsubmit="return confirm('Сбросить все сессии? Все пользователи выйдут.');">
+                <button type="submit" class="btn btn-danger">Сбросить все сессии</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const toastMsg = {{ request.query_params.get('toast') | tojson }};
+        if (toastMsg) { showToast(toastMsg); }
+    </script>
+</body>
+</html>
