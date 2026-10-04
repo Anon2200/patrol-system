@@ -4,7 +4,10 @@ import hmac
 import io
 import json
 import os
+import secrets
+import shutil
 import sqlite3
+import tempfile
 import time
 import urllib.parse
 from collections import Counter
@@ -16,18 +19,23 @@ from fastapi import FastAPI, Request, Form, File, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # ---------------------------------------------------------------------------
-# Конфигурация (базовые значения; рабочие хранятся в таблице meta)
+# Конфигурация
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
 
+APP_VERSION = "4.0 (волна 1: служебный контур)"
+START_TIME = datetime.now()
+
 SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
 PATROL_PIN = os.environ.get("PATROL_PIN", "1234")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "1029384756")
+DEV_PASSWORD = os.environ.get("DEV_PASSWORD", "developer")
 ADMIN_LABEL = "АДМИНИСТРАТОР"
 
 DEFAULT_PATROL_NAMES = [
@@ -93,7 +101,7 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # ---------------------------------------------------------------------------
-# Защитные HTTP-заголовки на всех ответах
+# Защитные HTTP-заголовки и запрет кеша статики
 # ---------------------------------------------------------------------------
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
@@ -101,6 +109,13 @@ async def security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+@app.middleware("http")
+async def no_cache_static(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
     return response
 
 # ---------------------------------------------------------------------------
@@ -164,6 +179,16 @@ def init_db() -> None:
         """
     )
     conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS error_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            path TEXT,
+            message TEXT
+        )
+        """
+    )
+    conn.execute(
         "UPDATE violations SET violation_type = ? WHERE violation_type = ?",
         ("Нарушение лок. акта №36", "Отсутствие формы / бейджа"),
     )
@@ -179,7 +204,7 @@ def on_startup() -> None:
     init_db()
 
 # ---------------------------------------------------------------------------
-# PWA: service worker и manifest (офлайн-режим)
+# PWA
 # ---------------------------------------------------------------------------
 @app.get("/sw.js")
 async def service_worker():
@@ -190,10 +215,24 @@ async def manifest():
     return FileResponse(BASE_DIR / "static" / "manifest.webmanifest", media_type="application/manifest+json")
 
 # ---------------------------------------------------------------------------
-# Страницы ошибок (404 / 500)
+# Журнал ошибок и страницы ошибок
 # ---------------------------------------------------------------------------
+def log_error(path: str, message: str) -> None:
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT INTO error_log (created_at, path, message) VALUES (?, ?, ?)",
+            (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), path, message[:2000]),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code >= 500:
+        log_error(request.url.path, f"HTTP {exc.status_code}: {exc.detail}")
     message = "Страница не найдена." if exc.status_code == 404 else str(exc.detail)
     return templates.TemplateResponse(
         "error.html",
@@ -203,6 +242,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
+    log_error(request.url.path, f"{type(exc).__name__}: {exc}")
     return templates.TemplateResponse(
         "error.html",
         {"request": request, "code": 500, "message": "Внутренняя ошибка сервера. Попробуйте обновить страницу позже."},
@@ -210,17 +250,20 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 # ---------------------------------------------------------------------------
-# Защита: подписи cookie и ограничение попыток входа
+# Защита: подписи cookie, соль сессий, лимит попыток
 # ---------------------------------------------------------------------------
+def _sign_key() -> bytes:
+    return (SECRET_KEY + "|" + get_meta("session_salt", "")).encode()
+
 def sign_value(value: str) -> str:
-    sig = hmac.new(SECRET_KEY.encode(), value.encode(), hashlib.sha256).hexdigest()[:32]
+    sig = hmac.new(_sign_key(), value.encode(), hashlib.sha256).hexdigest()[:32]
     return f"{value}.{sig}"
 
 def verify_signed(raw: Optional[str]) -> Optional[str]:
     if not raw or "." not in raw:
         return None
     value, sig = raw.rsplit(".", 1)
-    expected = hmac.new(SECRET_KEY.encode(), value.encode(), hashlib.sha256).hexdigest()[:32]
+    expected = hmac.new(_sign_key(), value.encode(), hashlib.sha256).hexdigest()[:32]
     if hmac.compare_digest(sig, expected):
         return value
     return None
@@ -248,7 +291,7 @@ def clear_fails(ip: str) -> None:
     LOGIN_ATTEMPTS.pop(ip, None)
 
 # ---------------------------------------------------------------------------
-# Настройки (таблица meta) и динамические справочники
+# Настройки (meta) и справочники
 # ---------------------------------------------------------------------------
 def get_meta(key: str, default: str = "") -> str:
     conn = get_db_connection()
@@ -270,6 +313,9 @@ def get_pin() -> str:
 
 def get_admin_password() -> str:
     return get_meta("admin_password") or ADMIN_PASSWORD
+
+def get_dev_password() -> str:
+    return get_meta("dev_password") or DEV_PASSWORD
 
 def get_deviant_min() -> int:
     try:
@@ -303,10 +349,18 @@ def get_departments():
     return dict(DEPARTMENTS)
 
 # ---------------------------------------------------------------------------
-# Вспомогательные функции
+# Роли и вспомогательные функции
 # ---------------------------------------------------------------------------
+def get_role(request: Request) -> Optional[str]:
+    return verify_signed(request.cookies.get(COOKIE_AUTH_ROLE))
+
 def is_admin(request: Request) -> bool:
-    return verify_signed(request.cookies.get(COOKIE_AUTH_ROLE)) == "admin"
+    return get_role(request) in ("admin", "dev")
+
+def is_dev(request: Request) -> bool:
+    return get_role(request) == "dev"
+
+templates.env.globals["is_dev"] = is_dev
 
 def get_patrol_names():
     conn = get_db_connection()
@@ -388,6 +442,13 @@ def format_duration(minutes: int) -> str:
     if h:
         return f"{h} ч {m} мин"
     return f"{m} мин"
+
+def human_size(n: float) -> str:
+    for unit in ["Б", "КБ", "МБ", "ГБ"]:
+        if n < 1024:
+            return f"{n:.0f} {unit}" if unit == "Б" else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} ТБ"
 
 def render_csv(rows) -> str:
     buffer = io.StringIO()
@@ -605,7 +666,7 @@ def add_violation(
     return toast_redirect("/", "Нарушение сохранено ✓")
 
 # ---------------------------------------------------------------------------
-# Служебные проверки: живой статус, дубль-контроль, мини-досье
+# Служебные проверки
 # ---------------------------------------------------------------------------
 @app.get("/check/student")
 def check_student(request: Request, name: str = ""):
@@ -681,7 +742,7 @@ def check_dossier(request: Request, name: str = ""):
     )
 
 # ---------------------------------------------------------------------------
-# Маршруты администратора
+# Вход администратора и разработчика
 # ---------------------------------------------------------------------------
 @app.get("/login", response_class=HTMLResponse)
 def admin_login_form(request: Request):
@@ -701,7 +762,11 @@ def admin_login(request: Request, password: str = Form(...)):
             {"request": request, "error": "Слишком много попыток входа. Повторите через 10 минут."},
             status_code=429,
         )
-    if password != get_admin_password():
+    if password == get_dev_password():
+        role = "dev"
+    elif password == get_admin_password():
+        role = "admin"
+    else:
         register_fail(ip)
         return templates.TemplateResponse(
             "login.html",
@@ -712,7 +777,7 @@ def admin_login(request: Request, password: str = Form(...)):
     response = RedirectResponse(url="/admin", status_code=303)
     response.set_cookie(
         key=COOKIE_AUTH_ROLE,
-        value=sign_value("admin"),
+        value=sign_value(role),
         httponly=True,
         samesite="lax",
         secure=True,
@@ -725,6 +790,150 @@ def admin_logout():
     response.delete_cookie(COOKIE_AUTH_ROLE)
     return response
 
+# ---------------------------------------------------------------------------
+# Служебный контур разработчика
+# ---------------------------------------------------------------------------
+@app.get("/dev/system", response_class=HTMLResponse)
+def dev_system(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/login", status_code=303)
+    conn = get_db_connection()
+    counts = {
+        "violations": conn.execute("SELECT COUNT(*) FROM violations").fetchone()[0],
+        "patrol_members": conn.execute("SELECT COUNT(*) FROM patrol_members").fetchone()[0],
+        "duty_schedule": conn.execute("SELECT COUNT(*) FROM duty_schedule").fetchone()[0],
+        "shifts": conn.execute("SELECT COUNT(*) FROM shifts").fetchone()[0],
+        "error_log": conn.execute("SELECT COUNT(*) FROM error_log").fetchone()[0],
+    }
+    conn.close()
+
+    uptime = datetime.now() - START_TIME
+    uptime_str = f"{uptime.days} дн. {uptime.seconds // 3600} ч. {(uptime.seconds % 3600) // 60} мин."
+
+    try:
+        db_size = human_size(os.path.getsize(DB_PATH))
+    except OSError:
+        db_size = "недоступно"
+
+    warnings = []
+    if SECRET_KEY == "zameni-menya-na-sluchaynuyu-stroku":
+        warnings.append("SECRET_KEY не задан в переменных окружения: используется значение по умолчанию.")
+    if get_dev_password() == DEV_PASSWORD and DEV_PASSWORD == "developer":
+        warnings.append("Пароль разработчика не изменён: задайте переменную DEV_PASSWORD или смените его в meta.")
+    if not get_meta("session_salt"):
+        warnings.append("Соль сессий не инициализирована: выполните сброс сессий на странице «Резерв и сессии».")
+
+    return templates.TemplateResponse(
+        "dev_system.html",
+        {
+            "request": request,
+            "version": APP_VERSION,
+            "uptime": uptime_str,
+            "counts": counts,
+            "db_size": db_size,
+            "db_dir": str(DB_DIR),
+            "db_writable": os.access(DB_DIR, os.W_OK),
+            "last_export": get_meta("last_export_at", "") or "никогда",
+            "last_db_backup": get_meta("last_db_backup_at", "") or "никогда",
+            "types_count": len(get_violation_types()),
+            "deps_count": len(get_departments()),
+            "deviant_min": get_deviant_min(),
+            "deviants_reset_at": get_deviants_reset_at() or "не сбрасывался",
+            "warnings": warnings,
+        },
+    )
+
+@app.get("/dev/errors", response_class=HTMLResponse)
+def dev_errors(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/login", status_code=303)
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM error_log ORDER BY id DESC LIMIT 100").fetchall()
+    conn.close()
+    return templates.TemplateResponse(
+        "dev_errors.html",
+        {"request": request, "rows": rows},
+    )
+
+@app.post("/dev/errors/clear")
+def dev_errors_clear(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/login", status_code=303)
+    conn = get_db_connection()
+    conn.execute("DELETE FROM error_log")
+    conn.commit()
+    conn.close()
+    return toast_redirect("/dev/errors", "Журнал ошибок очищен")
+
+@app.get("/dev/tools", response_class=HTMLResponse)
+def dev_tools(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/login", status_code=303)
+    return templates.TemplateResponse(
+        "dev_tools.html",
+        {
+            "request": request,
+            "last_db_backup": get_meta("last_db_backup_at", "") or "никогда",
+        },
+    )
+
+@app.get("/dev/backup")
+def dev_backup(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/login", status_code=303)
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
+    tmp.close()
+    src = get_db_connection()
+    dst = sqlite3.connect(tmp.name)
+    src.backup(dst)
+    dst.close()
+    src.close()
+    set_meta("last_db_backup_at", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    filename = f"patrol_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    return FileResponse(
+        tmp.name,
+        filename=filename,
+        media_type="application/octet-stream",
+        background=BackgroundTask(os.remove, tmp.name),
+    )
+
+@app.post("/dev/restore-db")
+async def dev_restore_db(request: Request, file: UploadFile = File(...)):
+    if not is_dev(request):
+        return RedirectResponse(url="/login", status_code=303)
+    data = await file.read()
+    if not data.startswith(b"SQLite format 3\x00"):
+        return toast_redirect("/dev/tools", "Файл не является базой данных SQLite")
+    tmp_cur = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
+    tmp_cur.close()
+    src = get_db_connection()
+    dst = sqlite3.connect(tmp_cur.name)
+    src.backup(dst)
+    dst.close()
+    src.close()
+    try:
+        with open(DB_PATH, "wb") as f:
+            f.write(data)
+        conn = get_db_connection()
+        conn.execute("SELECT COUNT(*) FROM violations").fetchone()
+        conn.close()
+        os.remove(tmp_cur.name)
+        return toast_redirect("/dev/tools", "База данных восстановлена из файла")
+    except Exception:
+        shutil.copyfile(tmp_cur.name, DB_PATH)
+        os.remove(tmp_cur.name)
+        return toast_redirect("/dev/tools", "Ошибка восстановления: возвращена прежняя база")
+
+@app.post("/dev/reset-sessions")
+def dev_reset_sessions(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/login", status_code=303)
+    set_meta("session_salt", secrets.token_hex(16))
+    return RedirectResponse(url="/login", status_code=303)
+
+# ---------------------------------------------------------------------------
+# Маршруты администратора
+# ---------------------------------------------------------------------------
 @app.get("/admin", response_class=HTMLResponse)
 def admin_panel(
     request: Request,
@@ -1428,7 +1637,7 @@ def admin_export(
     )
 
 # ---------------------------------------------------------------------------
-# Статистика (расширенный дашборд)
+# Статистика
 # ---------------------------------------------------------------------------
 @app.get("/stats", response_class=HTMLResponse)
 def stats_page(request: Request):
