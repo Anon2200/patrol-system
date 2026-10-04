@@ -9,6 +9,16 @@
     <meta name="theme-color" content="#0a0e13">
     <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/app.js"></script>
+    <style>
+        .dossier-overlay { position: fixed; inset: 0; background: rgba(4, 6, 9, 0.7); opacity: 0; pointer-events: none; transition: opacity 0.3s ease; z-index: 970; }
+        .dossier-overlay.show { opacity: 1; pointer-events: auto; }
+        .dossier-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 360px; max-width: 92%; background: var(--panel); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform 0.32s cubic-bezier(0.2, 0.8, 0.2, 1); z-index: 975; display: flex; flex-direction: column; }
+        .dossier-panel.open { transform: translateX(0); }
+        .dossier-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px; border-bottom: 1px solid var(--line); background: repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(200, 162, 74, 0.04) 8px, rgba(200, 162, 74, 0.04) 16px); }
+        .dossier-title { font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; font-size: 12px; }
+        .dossier-body { overflow-y: auto; padding: 14px; }
+        .dossier-item { border: 1px solid var(--line); border-left: 3px solid var(--accent); padding: 10px 12px; margin-bottom: 10px; border-radius: 2px; background: var(--panel2); font-size: 12px; line-height: 1.7; }
+    </style>
 </head>
 <body>
     {% if not logged_in %}
@@ -65,6 +75,7 @@
                 <span>Фиксация нарушения</span>
             </div>
             <div class="nav-links">
+                <span class="badge badge-green" id="netBadge">КАНАЛ: СЕТЬ</span>
                 <span class="user-badge">{{ patrol_name }}</span>
                 <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">РЕЖИМ: НОЧЬ</button>
                 <a href="/patrol/logout" class="nav-link nav-link-danger">Выйти</a>
@@ -119,6 +130,7 @@
                         <option value="{{ s }}"></option>
                         {% endfor %}
                     </datalist>
+                    <div id="studentCheck" style="min-height: 26px; margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;"></div>
                 </div>
 
                 <div class="form-group">
@@ -140,10 +152,22 @@
         </div>
     </div>
 
+    <div class="dossier-overlay" id="dossierOverlay" onclick="closeDossier()"></div>
+    <aside class="dossier-panel" id="dossierPanel">
+        <div class="dossier-header">
+            <div class="dossier-title" id="dossierTitle">Досье</div>
+            <button class="sidebar-close" onclick="closeDossier()" title="Закрыть">✕</button>
+        </div>
+        <div class="dossier-body" id="dossierBody"></div>
+    </aside>
+
     <script>
         const studentGroups = {{ student_groups_json | safe }};
         const nameInput = document.getElementById('student_name');
         const groupInput = document.getElementById('student_group');
+        const typeSelect = document.getElementById('violation_type');
+        const checkBox = document.getElementById('studentCheck');
+
         nameInput.addEventListener('change', function () {
             const group = studentGroups[nameInput.value.trim()];
             if (group) {
@@ -151,6 +175,109 @@
             }
         });
 
+        // ===== Живая проверка студента + дубль-контроль (B) =====
+        let lastMatches = [];
+        let checkTimer = null;
+
+        function escapeJs(s) { return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
+        function refreshCheckLine() {
+            const matches = lastMatches;
+            if (!matches.length) { return; }
+            const curType = typeSelect.value;
+            if (matches.length === 1) {
+                const m = matches[0];
+                let html = '';
+                if (m.count >= 2) {
+                    html += '<span class="badge badge-darkred">Девиант: ' + m.count + ' нар.</span>';
+                } else {
+                    html += '<span class="badge badge-orange">1 нарушение</span>';
+                }
+                html += '<span class="badge badge-gray">последнее ' + m.last + '</span>';
+                if (m.today_types.indexOf(curType) !== -1) {
+                    html += '<span class="badge badge-red">Уже записан сегодня по этому типу</span>';
+                }
+                html += '<button type="button" class="btn btn-secondary btn-sm" onclick="openDossier(\'' + escapeJs(m.name) + '\')">Досье</button>';
+                checkBox.innerHTML = html;
+            } else {
+                const m = matches[0];
+                checkBox.innerHTML =
+                    '<span class="badge badge-blue">Совпадений: ' + matches.length + '</span>' +
+                    '<span class="badge badge-gray">топ: ' + m.name + ' (' + m.count + ')</span>' +
+                    '<button type="button" class="btn btn-secondary btn-sm" onclick="openDossier(\'' + escapeJs(m.name) + '\')">Досье</button>';
+            }
+        }
+
+        nameInput.addEventListener('input', function () {
+            clearTimeout(checkTimer);
+            const q = nameInput.value.trim();
+            if (q.length < 3) { checkBox.innerHTML = ''; lastMatches = []; return; }
+            checkTimer = setTimeout(function () {
+                fetch('/check/student?name=' + encodeURIComponent(q))
+                    .then(function (r) { return r.json(); })
+                    .then(function (res) {
+                        if (!res.ok) return;
+                        lastMatches = res.matches;
+                        if (!res.matches.length) {
+                            checkBox.innerHTML = '<span class="badge badge-green">Чист: записей нет</span>';
+                        } else {
+                            refreshCheckLine();
+                        }
+                    })
+                    .catch(function () { checkBox.innerHTML = ''; lastMatches = []; });
+            }, 300);
+        });
+
+        typeSelect.addEventListener('change', function () {
+            if (lastMatches.length) refreshCheckLine();
+        });
+
+        // ===== Мини-досье по тапу (C) =====
+        function openDossier(name) {
+            fetch('/check/dossier?name=' + encodeURIComponent(name))
+                .then(function (r) { return r.json(); })
+                .then(function (res) {
+                    document.getElementById('dossierTitle').textContent = 'Досье: ' + name;
+                    const body = document.getElementById('dossierBody');
+                    if (!res.ok || !res.items.length) {
+                        body.innerHTML = '<div class="empty-state"><div class="empty-state-icon">∅</div><div class="empty-state-text">Записей нет</div></div>';
+                    } else {
+                        body.innerHTML = res.items.map(function (it) {
+                            return '<div class="dossier-item">' +
+                                '<div class="mono">' + it.created_at + '</div>' +
+                                '<div>' + it.violation_type + ' · группа ' + it.student_group + '</div>' +
+                                '<div style="color: var(--muted);">Патрульный: ' + it.patrol_name + (it.comment ? ' · ' + it.comment : '') + '</div>' +
+                                '</div>';
+                        }).join('');
+                    }
+                    document.getElementById('dossierPanel').classList.add('open');
+                    document.getElementById('dossierOverlay').classList.add('show');
+                });
+        }
+        function closeDossier() {
+            document.getElementById('dossierPanel').classList.remove('open');
+            document.getElementById('dossierOverlay').classList.remove('show');
+        }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeDossier();
+        });
+
+        // ===== Индикатор связи (E) =====
+        function updateNetBadge() {
+            const b = document.getElementById('netBadge');
+            if (!b) return;
+            if (navigator.onLine) {
+                b.textContent = 'КАНАЛ: СЕТЬ';
+                b.className = 'badge badge-green';
+            } else {
+                b.textContent = 'КАНАЛ: ОФЛАЙН';
+                b.className = 'badge badge-red';
+            }
+        }
+        window.addEventListener('online', function () { updateNetBadge(); flushQueue(); });
+        window.addEventListener('offline', updateNetBadge);
+
+        // ===== Офлайн-очередь =====
         const QUEUE_KEY = 'offline_violations';
         const form = document.getElementById('violationForm');
 
@@ -176,8 +303,11 @@
             });
             saveQueue(q);
             form.reset();
+            checkBox.innerHTML = '';
+            lastMatches = [];
             showToast('Сохранено офлайн. Отправится при появлении сети.');
             updateOfflineBadge();
+            updateNetBadge();
         });
 
         async function flushQueue() {
@@ -202,8 +332,7 @@
             updateOfflineBadge();
         }
 
-        window.addEventListener('online', flushQueue);
-        window.addEventListener('load', function () { updateOfflineBadge(); flushQueue(); });
+        window.addEventListener('load', function () { updateOfflineBadge(); updateNetBadge(); flushQueue(); });
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () { navigator.serviceWorker.register('/sw.js'); });
