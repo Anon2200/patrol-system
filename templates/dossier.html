@@ -23,17 +23,14 @@
 
         {% if not data %}
         <div class="card">
-            <div class="form-group">
-                <label class="form-label" for="name">ФИО студента</label>
-                <form action="/admin/dossier" method="GET" style="display: flex; gap: 10px;">
-                    <input class="form-input" type="text" id="name" name="name" value="{{ query }}" placeholder="Введите ФИО..." required style="flex: 1;">
-                    <button type="submit" class="btn btn-primary">Найти</button>
-                </form>
-            </div>
+            <form action="/admin/dossier" method="GET" style="display: flex; gap: 10px;">
+                <input class="form-input" type="text" name="name" value="{{ query }}" placeholder="Введите ФИО студента..." required style="flex: 1;">
+                <button type="submit" class="btn btn-primary">Найти</button>
+            </form>
             {% if query %}
             <div class="empty-state" style="margin-top: 20px;">
                 <div class="empty-state-icon">∅</div>
-                <div class="empty-state-text">Студент "{{ query }}" не найден в базе</div>
+                <div class="empty-state-text">Студент не найден в базе</div>
             </div>
             {% endif %}
         </div>
@@ -46,18 +43,18 @@
             </div>
             <div class="stat-card">
                 <div class="stat-icon">// ГРУППЫ</div>
-                <div class="stat-number" style="font-size: 24px;">{{ data.groups|length }}</div>
-                <div class="stat-label">{{ data.groups | join(', ') }}</div>
+                <div class="stat-number" style="font-size: 20px;">{{ data.groups | join(', ') }}</div>
+                <div class="stat-label">Группы студента</div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">// ПЕРВОЕ</div>
                 <div class="stat-number" style="font-size: 18px;">{{ data.first[:10] }}</div>
-                <div class="stat-label">Дата первого</div>
+                <div class="stat-label">Первое нарушение</div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">// ПОСЛЕДНЕЕ</div>
                 <div class="stat-number" style="font-size: 18px;">{{ data.last[:10] }}</div>
-                <div class="stat-label">Дата последнего</div>
+                <div class="stat-label">Последнее нарушение</div>
             </div>
         </div>
 
@@ -104,15 +101,21 @@
 
         <div class="table-card">
             <div class="table-header">
-                <div class="table-title">Все нарушения ({{ data.total }})</div>
+                <div class="table-title">Все нарушения · {{ data.total }}</div>
             </div>
             <div class="table-wrapper">
                 <table>
                     <thead>
-                        <tr><th>Дата</th><th>Тип</th><th>Группа</th><th>Патрульный</th><th>Комментарий</th></tr>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Тип</th>
+                            <th>Группа</th>
+                            <th>Патрульный</th>
+                            <th>Комментарий</th>
+                        </tr>
                     </thead>
                     <tbody>
-                        {% for r in data.items %}
+                        {% for r in data['records'] %}
                         <tr>
                             <td class="mono">{{ r.created_at }}</td>
                             <td><span class="{{ get_badge_class(r.violation_type) }}">{{ r.violation_type }}</span></td>
