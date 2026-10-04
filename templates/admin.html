@@ -185,8 +185,8 @@
                             <td>{{ v.comment or "—" }}</td>
                             <td style="white-space: nowrap;">
                                 <a href="/admin/edit/{{ v.id }}" class="btn btn-secondary btn-sm" title="Редактировать">Правка</a>
-                                <form style="display: inline;" action="/admin/delete/{{ v.id }}" method="POST" onsubmit="return confirm('Переместить запись в корзину?');">
-                                    <button type="submit" class="btn btn-danger btn-sm" title="В корзину">Удалить</button>
+                                <form style="display: inline;" action="/admin/delete/{{ v.id }}" method="POST" onsubmit="return confirm('Удалить запись? Восстановление — через разработчика.');">
+                                    <button type="submit" class="btn btn-danger btn-sm" title="Удалить">Удалить</button>
                                 </form>
                             </td>
                         </tr>
@@ -249,7 +249,7 @@
         function bulkDelete() {
             const ids = getSelectedIds();
             if (!ids.length) { alert('Выберите хотя бы одну запись'); return; }
-            if (!confirm('Переместить выбранные записи в корзину: ' + ids.length + '?')) return;
+            if (!confirm('Удалить выбранные записи: ' + ids.length + '? Восстановление — через разработчика.')) return;
             submitIds('/admin/bulk/delete', ids);
         }
 
