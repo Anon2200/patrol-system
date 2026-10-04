@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
 
-APP_VERSION = "4.1 (волна 2: порядок)"
+APP_VERSION = "4.2 (волна 3: штаб)"
 START_TIME = datetime.now()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
@@ -1978,4 +1978,52 @@ def stats_page(request: Request):
             "get_badge_class": get_badge_class,
             "chart_data_json": json.dumps(chart_data, ensure_ascii=False),
         },
+    )
+
+# ---------------------------------------------------------------------------
+# Волна 3: оперативный монитор «Штаб»
+# ---------------------------------------------------------------------------
+@app.get("/hq", response_class=HTMLResponse)
+def hq_page(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    return templates.TemplateResponse("hq.html", {"request": request})
+
+@app.get("/hq/data")
+def hq_data(request: Request):
+    if not is_admin(request):
+        return HTMLResponse(content=json.dumps({"ok": False}), media_type="application/json", status_code=403)
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    conn = get_db_connection()
+    today_count = conn.execute("SELECT COUNT(*) FROM violations WHERE deleted_at IS NULL AND created_at >= ?", (today + " 00:00:00",)).fetchone()[0]
+    week_count = conn.execute("SELECT COUNT(*) FROM violations WHERE deleted_at IS NULL AND created_at >= ?", (week_ago + " 00:00:00",)).fetchone()[0]
+    feed_rows = conn.execute("SELECT * FROM violations WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 12").fetchall()
+    duty_rows = conn.execute("SELECT patrol_name FROM duty_schedule WHERE duty_date = ?", (today,)).fetchall()
+    open_shifts = conn.execute("SELECT COUNT(*) FROM shifts WHERE ended_at IS NULL").fetchone()[0]
+    conn.close()
+    feed = [
+        {
+            "time": r["created_at"][11:16],
+            "group": r["student_group"],
+            "type": r["violation_type"],
+            "patrol": r["patrol_name"],
+        }
+        for r in feed_rows
+    ]
+    return HTMLResponse(
+        content=json.dumps(
+            {
+                "ok": True,
+                "today": today_count,
+                "week": week_count,
+                "on_duty": [r["patrol_name"] for r in duty_rows],
+                "open_shifts": open_shifts,
+                "feed": feed,
+                "clock": now.strftime("%d.%m.%Y %H:%M:%S"),
+            },
+            ensure_ascii=False,
+        ),
+        media_type="application/json",
     )
