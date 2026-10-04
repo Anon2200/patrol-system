@@ -21,6 +21,9 @@
                 <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
                 <div class="page-title"><span>Статистика нарушений</span></div>
             </div>
+            <div class="nav-links">
+                <span class="badge badge-gray">Порог девианта: {{ deviant_min }}+</span>
+            </div>
         </div>
 
         <div class="stats-grid">
@@ -125,7 +128,7 @@
                     <tbody>
                         {% for s in top_students %}
                         <tr>
-                            <td><strong>{{ s.name }}</strong> {% if s.count >= 2 %}<span class="badge badge-darkred">Девиант</span>{% endif %}</td>
+                            <td><strong>{{ s.name }}</strong> {% if s.count >= deviant_min %}<span class="badge badge-darkred">Девиант</span>{% endif %}</td>
                             <td><span class="badge badge-red">{{ s.count }}</span></td>
                             <td class="mono">{{ s.groups }}</td>
                             <td class="mono">{{ s.last }}</td>
