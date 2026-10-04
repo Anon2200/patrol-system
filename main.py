@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
 
-APP_VERSION = "4.2 (волна 3: штаб)"
+APP_VERSION = "4.3 (встроенная справка)"
 START_TIME = datetime.now()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
@@ -801,6 +801,25 @@ def check_dossier(request: Request, name: str = ""):
     return HTMLResponse(
         content=json.dumps({"ok": True, "items": items}, ensure_ascii=False),
         media_type="application/json",
+    )
+
+# ---------------------------------------------------------------------------
+# Встроенная справка
+# ---------------------------------------------------------------------------
+@app.get("/help", response_class=HTMLResponse)
+def help_page(request: Request):
+    patrol_name = get_patrol_name(request)
+    if not patrol_name and not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    if is_dev(request):
+        role = "dev"
+    elif is_admin(request):
+        role = "admin"
+    else:
+        role = "patrol"
+    return templates.TemplateResponse(
+        "help.html",
+        {"request": request, "role": role, "patrol_name": patrol_name or ""},
     )
 
 # ---------------------------------------------------------------------------
