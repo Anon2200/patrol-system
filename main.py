@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
 
-APP_VERSION = "4.4 (отдельный вход разработчика)"
+APP_VERSION = "4.5 (усиленное разделение ролей)"
 START_TIME = datetime.now()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
@@ -400,7 +400,10 @@ def get_departments():
 # Роли и вспомогательные функции
 # ---------------------------------------------------------------------------
 def get_role(request: Request) -> Optional[str]:
-    return verify_signed(request.cookies.get(COOKIE_AUTH_ROLE))
+    role = verify_signed(request.cookies.get(COOKIE_AUTH_ROLE))
+    if role in ("admin", "dev"):
+        return role
+    return None
 
 def is_admin(request: Request) -> bool:
     return get_role(request) in ("admin", "dev")
@@ -409,6 +412,7 @@ def is_dev(request: Request) -> bool:
     return get_role(request) == "dev"
 
 templates.env.globals["is_dev"] = is_dev
+templates.env.globals["is_admin"] = is_admin
 
 def get_patrol_names():
     conn = get_db_connection()
@@ -823,7 +827,7 @@ def help_page(request: Request):
     )
 
 # ---------------------------------------------------------------------------
-# Вход администратора и отдельный вход разработчика
+# Входы: администратор и разработчик раздельно
 # ---------------------------------------------------------------------------
 @app.get("/login", response_class=HTMLResponse)
 def admin_login_form(request: Request):
@@ -849,7 +853,7 @@ def admin_login(request: Request, password: str = Form(...)):
         register_fail(ip)
         log_action(request, "вход в админку: отказ", f"IP {ip}")
         if password == get_dev_password():
-            error = "Это пароль разработчика. Используйте служебный вход разработчика."
+            error = "Это пароль разработчика. Используйте вход разработчика: ссылка внизу страницы."
         else:
             error = "Неверный пароль. Попробуйте ещё раз."
         return templates.TemplateResponse(
@@ -887,12 +891,18 @@ def dev_login(request: Request, password: str = Form(...)):
             {"request": request, "error": "Слишком много попыток входа. Повторите через 10 минут."},
             status_code=429,
         )
-    if password != get_dev_password():
+    if password == get_dev_password():
+        role = "dev"
+    else:
         register_fail(ip)
         log_action(request, "вход разработчика: отказ", f"IP {ip}")
+        if password == get_admin_password():
+            error = "Это пароль администратора. Используйте вход администратора."
+        else:
+            error = "Неверный пароль разработчика."
         return templates.TemplateResponse(
             "dev_login.html",
-            {"request": request, "error": "Неверный пароль разработчика."},
+            {"request": request, "error": error},
             status_code=400,
         )
     clear_fails(ip)
@@ -900,7 +910,7 @@ def dev_login(request: Request, password: str = Form(...)):
     response = RedirectResponse(url="/admin", status_code=303)
     response.set_cookie(
         key=COOKIE_AUTH_ROLE,
-        value=sign_value("dev"),
+        value=sign_value(role),
         httponly=True,
         samesite="lax",
         secure=True,
