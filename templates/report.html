@@ -16,8 +16,13 @@
                 <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
                 <div class="page-title"><span>Отчёт за период</span></div>
             </div>
-            <button class="btn btn-primary" onclick="window.print()">Печать</button>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-secondary" onclick="copySummary()">Скопировать сводку</button>
+                <button class="btn btn-primary" onclick="window.print()">Печать</button>
+            </div>
         </div>
+
+        <textarea id="summarySrc" style="display: none;">{{ summary_text }}</textarea>
 
         <div class="filters-card no-print">
             <form action="/admin/report" method="GET" class="filters-form">
@@ -97,5 +102,25 @@
             </div>
         </div>
     </div>
+
+    <script>
+        function copySummary() {
+            const src = document.getElementById('summarySrc');
+            const txt = src.value;
+            function done() { showToast('Сводка скопирована в буфер'); }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(txt).then(done).catch(function () { fallback(); });
+            } else {
+                fallback();
+            }
+            function fallback() {
+                src.style.display = 'block';
+                src.select();
+                document.execCommand('copy');
+                src.style.display = 'none';
+                done();
+            }
+        }
+    </script>
 </body>
 </html>
