@@ -61,6 +61,9 @@
     </nav>
 
     <div class="sidebar-footer">
+        <div class="sidebar-link" style="cursor: default; color: var(--muted); font-size: 11px; letter-spacing: 0.16em;">
+            {% if is_dev(request) %}РОЛЬ: РАЗРАБОТЧИК{% else %}РОЛЬ: АДМИНИСТРАТОР{% endif %}
+        </div>
         <button class="sidebar-link" onclick="toggleTheme()"><span class="theme-icon">РЕЖИМ: НОЧЬ</span></button>
         <a href="/admin/logout" class="sidebar-link danger">Выход</a>
     </div>
