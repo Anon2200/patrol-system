@@ -77,6 +77,7 @@
             <div class="nav-links">
                 <span class="badge badge-green" id="netBadge">КАНАЛ: СЕТЬ</span>
                 <span class="user-badge">{{ patrol_name }}</span>
+                <a href="/help" class="nav-link">Справка</a>
                 <button class="theme-toggle" id="themeBtn" onclick="toggleTheme()">РЕЖИМ: НОЧЬ</button>
                 <a href="/patrol/logout" class="nav-link nav-link-danger">Выйти</a>
             </div>
@@ -175,7 +176,7 @@
             }
         });
 
-        // ===== Живая проверка студента + дубль-контроль (B) =====
+        // ===== Живая проверка студента и дубль-контроль =====
         let lastMatches = [];
         let checkTimer = null;
 
@@ -232,7 +233,7 @@
             if (lastMatches.length) refreshCheckLine();
         });
 
-        // ===== Мини-досье по тапу (C) =====
+        // ===== Мини-досье по тапу =====
         function openDossier(name) {
             fetch('/check/dossier?name=' + encodeURIComponent(name))
                 .then(function (r) { return r.json(); })
@@ -262,7 +263,7 @@
             if (e.key === 'Escape') closeDossier();
         });
 
-        // ===== Индикатор связи (E) =====
+        // ===== Индикатор связи =====
         function updateNetBadge() {
             const b = document.getElementById('netBadge');
             if (!b) return;
