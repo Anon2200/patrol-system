@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Качество данных — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Качество данных</span></div>
+            </div>
+        </div>
+
+        <div class="stats-grid" style="margin-bottom: 20px;">
+            <div class="stat-card">
+                <div class="stat-icon">// ВСЕГО</div>
+                <div class="stat-number">{{ total }}</div>
+                <div class="stat-label">Записей в базе</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// СТАРЫЕ</div>
+                <div class="stat-number">{{ old_count }}</div>
+                <div class="stat-label">Старше года</div>
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom: 20px;">
+            <div class="table-header">
+                <div class="table-title">Группы без отделения ({{ bad_groups|length }})</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <tbody>
+                        {% for g in bad_groups %}
+                        <tr><td class="mono">{{ g }}</td></tr>
+                        {% else %}
+                        <tr><td style="padding: 20px; text-align: center; color: var(--muted);">Все группы корректны</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom: 20px;">
+            <div class="table-header">
+                <div class="table-title">Записи с пустыми полями ({{ empty_fields|length }})</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>ID</th><th>Студент</th><th>Группа</th><th>Дата</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for r in empty_fields %}
+                        <tr>
+                            <td>{{ r.id }}</td>
+                            <td>{{ r.student_name or "—" }}</td>
+                            <td>{{ r.student_group or "—" }}</td>
+                            <td class="mono">{{ r.created_at }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" style="padding: 20px; text-align: center; color: var(--muted);">Нет записей с пустыми полями</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom: 20px;">
+            <div class="table-header">
+                <div class="table-title">Разные написания одной фамилии ({{ name_variants|length }})</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <tbody>
+                        {% for cf, variants in name_variants %}
+                        <tr>
+                            <td colspan="{{ variants|length }}">
+                                {% for v in variants %}
+                                <span class="badge badge-orange" style="margin-right: 6px;">{{ v }}</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td style="padding: 20px; text-align: center; color: var(--muted);">Все фамилии написаны единообразно</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-title">Подозрительные дубли ({{ dup_suspects|length }})</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>Студент</th><th>Тип</th><th>Даты</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for d in dup_suspects %}
+                        <tr>
+                            <td>{{ d.name }}</td>
+                            <td><span class="badge badge-gray">{{ d.type }}</span></td>
+                            <td class="mono">{{ d.dates }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="3" style="padding: 20px; text-align: center; color: var(--muted);">Подозрительных дублей не найдено</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
