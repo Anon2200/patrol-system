@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
 
-APP_VERSION = "4.5 (усиленное разделение ролей)"
+APP_VERSION = "4.6 (статусы убраны, корзина и журнал только у разработчика)"
 START_TIME = datetime.now()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
@@ -37,12 +37,6 @@ PATROL_PIN = os.environ.get("PATROL_PIN", "1234")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "1029384756")
 DEV_PASSWORD = os.environ.get("DEV_PASSWORD", "developer")
 ADMIN_LABEL = "АДМИНИСТРАТОР"
-
-STATUS_LABELS = {
-    "new": "Новое",
-    "talk": "Проведена беседа",
-    "closed": "Закрыто",
-}
 
 TRASH_DAYS = 30
 
@@ -213,7 +207,6 @@ def init_db() -> None:
         conn.execute("ALTER TABLE violations ADD COLUMN status TEXT DEFAULT 'new'")
     if "deleted_at" not in cols:
         conn.execute("ALTER TABLE violations ADD COLUMN deleted_at TEXT")
-    conn.execute("UPDATE violations SET status = 'new' WHERE status IS NULL OR status = ''")
     conn.execute(
         "UPDATE violations SET violation_type = ? WHERE violation_type = ?",
         ("Нарушение лок. акта №36", "Отсутствие формы / бейджа"),
@@ -432,9 +425,6 @@ def get_patrol_name(request: Request) -> Optional[str]:
 def get_badge_class(violation_type: str) -> str:
     return f"badge badge-{VIOLATION_COLORS.get(violation_type, 'gray')}"
 
-def get_status_class(status: str) -> str:
-    return {"new": "badge badge-red", "talk": "badge badge-orange", "closed": "badge badge-green"}.get(status, "badge badge-gray")
-
 def get_repeat_offenders(min_count: Optional[int] = None):
     if min_count is None:
         min_count = get_deviant_min()
@@ -462,7 +452,7 @@ def get_known_students():
         known.setdefault(row["student_name"], row["student_group"])
     return known
 
-def build_violations_query(student_name, group, violation_type, date_from, date_to, q=None, has_comment=False, status=None, include_deleted=False):
+def build_violations_query(student_name, group, violation_type, date_from, date_to, q=None, has_comment=False, include_deleted=False):
     query = "SELECT * FROM violations WHERE 1=1"
     params = []
     if not include_deleted:
@@ -488,9 +478,6 @@ def build_violations_query(student_name, group, violation_type, date_from, date_
         params += [like, like, like, like]
     if has_comment:
         query += " AND comment IS NOT NULL AND comment != ''"
-    if status:
-        query += " AND status = ?"
-        params.append(status)
     return query, params
 
 def toast_redirect(url: str, message: str) -> RedirectResponse:
@@ -515,7 +502,7 @@ def render_csv(rows) -> str:
     buffer.write("\ufeff")
     writer = csv.writer(buffer, delimiter=";")
     writer.writerow(
-        ["ID", "Патрульный", "ФИО студента", "Группа", "Тип нарушения", "Комментарий", "Дата и время", "Статус"]
+        ["ID", "Патрульный", "ФИО студента", "Группа", "Тип нарушения", "Комментарий", "Дата и время"]
     )
     for row in rows:
         writer.writerow(
@@ -527,7 +514,6 @@ def render_csv(rows) -> str:
                 row["violation_type"],
                 row["comment"] or "",
                 row["created_at"],
-                STATUS_LABELS.get(row["status"] or "new", row["status"] or "new"),
             ]
         )
     return buffer.getvalue()
@@ -721,8 +707,8 @@ def add_violation(
     conn.execute(
         """
         INSERT INTO violations
-            (patrol_name, student_name, student_group, violation_type, comment, created_at, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'new')
+            (patrol_name, student_name, student_group, violation_type, comment, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (patrol_name, student_name_clean, student_group.strip(), violation_type, comment.strip(), created_at),
     )
@@ -1074,6 +1060,63 @@ def dev_reset_sessions(request: Request):
     return RedirectResponse(url="/dev/login", status_code=303)
 
 # ---------------------------------------------------------------------------
+# Корзина и журнал операций: только разработчик
+# ---------------------------------------------------------------------------
+@app.get("/admin/trash", response_class=HTMLResponse)
+def admin_trash(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    cutoff = (datetime.now() - timedelta(days=TRASH_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db_connection()
+    conn.execute("DELETE FROM violations WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff,))
+    conn.commit()
+    rows = conn.execute("SELECT * FROM violations WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC").fetchall()
+    conn.close()
+    return templates.TemplateResponse(
+        "trash.html",
+        {
+            "request": request,
+            "rows": rows,
+            "get_badge_class": get_badge_class,
+            "trash_days": TRASH_DAYS,
+        },
+    )
+
+@app.post("/admin/trash/restore/{violation_id}")
+def admin_trash_restore(request: Request, violation_id: int):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    conn = get_db_connection()
+    conn.execute("UPDATE violations SET deleted_at = NULL WHERE id = ?", (violation_id,))
+    conn.commit()
+    conn.close()
+    log_action(request, "восстановление из корзины", f"запись {violation_id}")
+    return toast_redirect("/admin/trash", "Запись восстановлена")
+
+@app.post("/admin/trash/purge/{violation_id}")
+def admin_trash_purge(request: Request, violation_id: int):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    conn = get_db_connection()
+    conn.execute("DELETE FROM violations WHERE id = ?", (violation_id,))
+    conn.commit()
+    conn.close()
+    log_action(request, "окончательное удаление из корзины", f"запись {violation_id}")
+    return toast_redirect("/admin/trash", "Запись удалена навсегда")
+
+@app.get("/admin/audit", response_class=HTMLResponse)
+def admin_audit(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 200").fetchall()
+    conn.close()
+    return templates.TemplateResponse(
+        "audit.html",
+        {"request": request, "rows": rows},
+    )
+
+# ---------------------------------------------------------------------------
 # Админ-панель
 # ---------------------------------------------------------------------------
 @app.get("/admin", response_class=HTMLResponse)
@@ -1086,7 +1129,6 @@ def admin_panel(
     date_to: Optional[str] = None,
     q: Optional[str] = None,
     has_comment: Optional[str] = None,
-    status: Optional[str] = None,
     page: int = 1,
     sort: str = "created_at",
     dir: str = "desc",
@@ -1099,7 +1141,7 @@ def admin_panel(
         dir = "desc"
     hc = bool(has_comment)
 
-    query, params = build_violations_query(student_name, group, violation_type, date_from, date_to, q=q, has_comment=hc, status=status)
+    query, params = build_violations_query(student_name, group, violation_type, date_from, date_to, q=q, has_comment=hc)
     conn = get_db_connection()
     total = conn.execute(query.replace("SELECT *", "SELECT COUNT(*)", 1), params).fetchone()[0]
     pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
@@ -1118,7 +1160,6 @@ def admin_panel(
     conn = get_db_connection()
     kpi_today = conn.execute("SELECT COUNT(*) FROM violations WHERE deleted_at IS NULL AND created_at >= ?", (today_str + " 00:00:00",)).fetchone()[0]
     kpi_week = conn.execute("SELECT COUNT(*) FROM violations WHERE deleted_at IS NULL AND created_at >= ?", (week_ago_str + " 00:00:00",)).fetchone()[0]
-    kpi_unprocessed = conn.execute("SELECT COUNT(*) FROM violations WHERE deleted_at IS NULL AND status = 'new'").fetchone()[0]
     open_shifts = conn.execute("SELECT COUNT(*) FROM shifts WHERE ended_at IS NULL").fetchone()[0]
     duty_rows = conn.execute("SELECT patrol_name FROM duty_schedule WHERE duty_date = ?", (today_str,)).fetchall()
     conn.close()
@@ -1142,7 +1183,6 @@ def admin_panel(
     kpi = {
         "today": kpi_today,
         "week": kpi_week,
-        "unprocessed": kpi_unprocessed,
         "deviants": len(get_repeat_offenders()),
         "on_duty": [r["patrol_name"] for r in duty_rows],
         "open_shifts": open_shifts,
@@ -1159,7 +1199,6 @@ def admin_panel(
         "date_to": date_to or "",
         "q": q or "",
         "has_comment": "1" if hc else "",
-        "status": status or "",
     }
     sort_urls = {}
     for col in SORTABLE_COLUMNS:
@@ -1188,8 +1227,6 @@ def admin_panel(
             "request": request,
             "violations": rows,
             "violation_types": get_violation_types(),
-            "status_labels": STATUS_LABELS,
-            "get_status_class": get_status_class,
             "name_filter": student_name or "",
             "group_filter": group or "",
             "type_filter": violation_type or "",
@@ -1197,7 +1234,6 @@ def admin_panel(
             "date_to_filter": date_to or "",
             "q_filter": q or "",
             "has_comment": hc,
-            "status_filter": status or "",
             "get_badge_class": get_badge_class,
             "repeat_names": get_repeat_offenders(),
             "sort": sort,
@@ -1213,19 +1249,6 @@ def admin_panel(
             "monday_str": monday_str,
         },
     )
-
-@app.post("/admin/status/{violation_id}")
-def admin_status_change(request: Request, violation_id: int, status: str = Form(...)):
-    if not is_admin(request):
-        return RedirectResponse(url="/login", status_code=303)
-    if status not in STATUS_LABELS:
-        return toast_redirect("/admin", "Неизвестный статус")
-    conn = get_db_connection()
-    conn.execute("UPDATE violations SET status = ? WHERE id = ?", (status, violation_id))
-    conn.commit()
-    conn.close()
-    log_action(request, "смена статуса", f"запись {violation_id} → {STATUS_LABELS[status]}")
-    return toast_redirect("/admin", f"Статус: {STATUS_LABELS[status]}")
 
 @app.post("/admin/bulk/delete")
 def admin_bulk_delete(request: Request, ids: List[int] = Form(...)):
@@ -1260,60 +1283,6 @@ def admin_bulk_export(request: Request, ids: List[int] = Form(...)):
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
-@app.get("/admin/trash", response_class=HTMLResponse)
-def admin_trash(request: Request):
-    if not is_admin(request):
-        return RedirectResponse(url="/login", status_code=303)
-    cutoff = (datetime.now() - timedelta(days=TRASH_DAYS)).strftime("%Y-%m-%d %H:%M:%S")
-    conn = get_db_connection()
-    conn.execute("DELETE FROM violations WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff,))
-    conn.commit()
-    rows = conn.execute("SELECT * FROM violations WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC").fetchall()
-    conn.close()
-    return templates.TemplateResponse(
-        "trash.html",
-        {
-            "request": request,
-            "rows": rows,
-            "get_badge_class": get_badge_class,
-            "trash_days": TRASH_DAYS,
-        },
-    )
-
-@app.post("/admin/trash/restore/{violation_id}")
-def admin_trash_restore(request: Request, violation_id: int):
-    if not is_admin(request):
-        return RedirectResponse(url="/login", status_code=303)
-    conn = get_db_connection()
-    conn.execute("UPDATE violations SET deleted_at = NULL WHERE id = ?", (violation_id,))
-    conn.commit()
-    conn.close()
-    log_action(request, "восстановление из корзины", f"запись {violation_id}")
-    return toast_redirect("/admin/trash", "Запись восстановлена")
-
-@app.post("/admin/trash/purge/{violation_id}")
-def admin_trash_purge(request: Request, violation_id: int):
-    if not is_admin(request):
-        return RedirectResponse(url="/login", status_code=303)
-    conn = get_db_connection()
-    conn.execute("DELETE FROM violations WHERE id = ?", (violation_id,))
-    conn.commit()
-    conn.close()
-    log_action(request, "окончательное удаление из корзины", f"запись {violation_id}")
-    return toast_redirect("/admin/trash", "Запись удалена навсегда")
-
-@app.get("/admin/audit", response_class=HTMLResponse)
-def admin_audit(request: Request):
-    if not is_admin(request):
-        return RedirectResponse(url="/login", status_code=303)
-    conn = get_db_connection()
-    rows = conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT 200").fetchall()
-    conn.close()
-    return templates.TemplateResponse(
-        "audit.html",
-        {"request": request, "rows": rows},
-    )
-
 @app.get("/admin/add", response_class=HTMLResponse)
 def admin_add_form(request: Request):
     if not is_admin(request):
@@ -1344,8 +1313,8 @@ def admin_add_save(
     conn.execute(
         """
         INSERT INTO violations
-            (patrol_name, student_name, student_group, violation_type, comment, created_at, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'new')
+            (patrol_name, student_name, student_group, violation_type, comment, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         (ADMIN_LABEL, student_name.strip(), student_group.strip(), violation_type, comment.strip(), created_at),
     )
@@ -1401,7 +1370,7 @@ def admin_delete(request: Request, violation_id: int):
     conn.commit()
     conn.close()
     log_action(request, "удаление в корзину", f"запись {violation_id}")
-    return toast_redirect("/admin", "Запись перемещена в корзину")
+    return toast_redirect("/admin", "Запись удалена из рабочего списка")
 
 @app.post("/admin/restore")
 async def admin_restore(request: Request, file: UploadFile = File(...)):
@@ -1432,8 +1401,8 @@ async def admin_restore(request: Request, file: UploadFile = File(...)):
         conn.execute(
             """
             INSERT INTO violations
-                (patrol_name, student_name, student_group, violation_type, comment, created_at, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'new')
+                (patrol_name, student_name, student_group, violation_type, comment, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (patrol_name, student_name, student_group, violation_type, comment, created_at),
         )
@@ -1884,11 +1853,10 @@ def admin_export(
     date_to: Optional[str] = None,
     q: Optional[str] = None,
     has_comment: Optional[str] = None,
-    status: Optional[str] = None,
 ):
     if not is_admin(request):
         return RedirectResponse(url="/login", status_code=303)
-    query, params = build_violations_query(student_name, group, violation_type, date_from, date_to, q=q, has_comment=bool(has_comment), status=status)
+    query, params = build_violations_query(student_name, group, violation_type, date_from, date_to, q=q, has_comment=bool(has_comment))
     query += " ORDER BY created_at DESC, id DESC"
     conn = get_db_connection()
     rows = conn.execute(query, params).fetchall()
