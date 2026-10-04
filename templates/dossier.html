@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Досье — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Досье студента</span></div>
+            </div>
+            <div class="nav-links">
+                <a href="/admin" class="nav-link nav-link-primary">← Админ-панель</a>
+            </div>
+        </div>
+
+        {% if not data %}
+        <div class="card">
+            <div class="form-group">
+                <label class="form-label" for="name">ФИО студента</label>
+                <form action="/admin/dossier" method="GET" style="display: flex; gap: 10px;">
+                    <input class="form-input" type="text" id="name" name="name" value="{{ query }}" placeholder="Введите ФИО..." required style="flex: 1;">
+                    <button type="submit" class="btn btn-primary">Найти</button>
+                </form>
+            </div>
+            {% if query %}
+            <div class="empty-state" style="margin-top: 20px;">
+                <div class="empty-state-icon">∅</div>
+                <div class="empty-state-text">Студент "{{ query }}" не найден в базе</div>
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="stats-grid" style="margin-bottom: 20px;">
+            <div class="stat-card">
+                <div class="stat-icon">// ВСЕГО</div>
+                <div class="stat-number">{{ data.total }}</div>
+                <div class="stat-label">Нарушений</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// ГРУППЫ</div>
+                <div class="stat-number" style="font-size: 24px;">{{ data.groups|length }}</div>
+                <div class="stat-label">{{ data.groups | join(', ') }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// ПЕРВОЕ</div>
+                <div class="stat-number" style="font-size: 18px;">{{ data.first[:10] }}</div>
+                <div class="stat-label">Дата первого</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">// ПОСЛЕДНЕЕ</div>
+                <div class="stat-number" style="font-size: 18px;">{{ data.last[:10] }}</div>
+                <div class="stat-label">Дата последнего</div>
+            </div>
+        </div>
+
+        <div class="charts-grid" style="margin-bottom: 20px;">
+            <div class="chart-card">
+                <div class="chart-title">По типам нарушений</div>
+                {% for t, c in data.by_type %}
+                <div class="hbar-row">
+                    <div class="hbar-label">{{ t }}</div>
+                    <div class="hbar-track"><div class="hbar-fill" style="width: {{ (c / data.total * 100)|round }}%;"></div></div>
+                    <div class="hbar-value">{{ c }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">По месяцам</div>
+                {% for m, c in data.by_month %}
+                <div class="hbar-row">
+                    <div class="hbar-label">{{ m }}</div>
+                    <div class="hbar-track"><div class="hbar-fill" style="width: {{ (c / data.total * 100)|round }}%;"></div></div>
+                    <div class="hbar-value">{{ c }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom: 20px;">
+            <div class="table-header">
+                <div class="table-title">Кто фиксировал</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <tbody>
+                        {% for p, c in data.by_patrol %}
+                        <tr>
+                            <td>{{ p }}</td>
+                            <td><span class="badge badge-blue">{{ c }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-title">Все нарушения ({{ data.total }})</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr><th>Дата</th><th>Тип</th><th>Группа</th><th>Патрульный</th><th>Комментарий</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for r in data.items %}
+                        <tr>
+                            <td class="mono">{{ r.created_at }}</td>
+                            <td><span class="{{ get_badge_class(r.violation_type) }}">{{ r.violation_type }}</span></td>
+                            <td><span class="badge badge-blue">{{ r.student_group }}</span></td>
+                            <td>{{ r.patrol_name }}</td>
+                            <td>{{ r.comment or "—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
