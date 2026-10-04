@@ -68,3 +68,31 @@
                 const d = await r.json();
                 if (!d.ok) return;
                 document.getElementById('hqClock').textContent = d.clock;
+                document.getElementById('hqToday').textContent = d.today;
+                document.getElementById('hqWeek').textContent = d.week;
+                document.getElementById('hqShifts').textContent = d.open_shifts;
+                document.getElementById('hqDuty').textContent = d.on_duty.length
+                    ? 'Дежурные сегодня: ' + d.on_duty.join(', ')
+                    : 'Сегодня дежурных нет';
+                const feedEl = document.getElementById('hqFeed');
+                if (!d.feed.length) {
+                    feedEl.innerHTML = '<div class="hq-empty">Записей пока нет</div>';
+                } else {
+                    feedEl.innerHTML = d.feed.map(function (f) {
+                        return '<div class="hq-row">' +
+                            '<span class="t">' + f.time + '</span>' +
+                            '<span class="g">' + f.group + '</span>' +
+                            '<span>' + f.type + '</span>' +
+                            '<span class="p">' + f.patrol + '</span>' +
+                            '</div>';
+                    }).join('');
+                }
+            } catch (e) {
+                /* тишина до следующего обновления */
+            }
+        }
+        hqRefresh();
+        setInterval(hqRefresh, 20000);
+    </script>
+</body>
+</html>
