@@ -46,7 +46,6 @@ body {
     position: relative;
 }
 
-/* Движущаяся тактическая сетка на фоне */
 body::before {
     content: "";
     position: fixed;
@@ -378,16 +377,52 @@ tbody tr:nth-child(even):hover { background: var(--row-hover); }
 .sidebar-sublink.active { color: var(--accent); font-weight: 800; background: var(--panel2); border-left: 2px solid var(--accent); }
 .sidebar-footer { padding: 12px; border-top: 1px solid var(--line); }
 
-/* ===== ПЕЧАТЬ ===== */
+/* ===== ПЕЧАТЬ: принудительный «бумажный» режим с высокой контрастностью ===== */
 @media print {
-    body { background: white !important; color: black !important; }
+    :root, [data-theme="dark"], [data-theme="light"] {
+        --bg: #ffffff;
+        --panel: #ffffff;
+        --panel2: #f2f2f2;
+        --line: #888888;
+        --text: #000000;
+        --muted: #222222;
+        --accent: #6b4f14;
+        --accent2: #1f3b57;
+        --danger: #8a1f1f;
+        --ok: #1f5c3a;
+        --input-bg: #ffffff;
+        --table-head-bg: #e6e6e6;
+        --row-even: #ffffff;
+        --row-hover: #ffffff;
+        --shadow: none;
+    }
+    body { background: #ffffff !important; color: #000000 !important; }
     body::before { display: none !important; }
-    .no-print, .sidebar, .sidebar-overlay, .menu-toggle-inline, .theme-toggle { display: none !important; }
-    .card, .table-card { box-shadow: none !important; border: 1px solid #999 !important; }
-    th { background: #eee !important; color: #333 !important; }
-    td, th { color: black !important; }
-    .badge { border: 1px solid #999; background: white !important; color: black !important; }
-    .stamp { color: #a03030 !important; border-color: #a03030 !important; }
+    .no-print, .sidebar, .sidebar-overlay, .menu-toggle-inline, .theme-toggle, .filters-card, .pagination { display: none !important; }
+    .card, .table-card, .chart-card, .stat-card, .login-card {
+        background: #ffffff !important;
+        box-shadow: none !important;
+        border: 1px solid #888 !important;
+        animation: none !important;
+    }
+    .card::before, .table-card::before, .chart-card::before, .stat-card::before, .login-card::before, .filters-card::before { display: none !important; }
+    .stat-card::after { background: #6b4f14 !important; }
+    .page-header { display: none !important; }
+    th { background: #e6e6e6 !important; color: #111 !important; }
+    td, th { color: #000000 !important; border-color: #888 !important; }
+    tbody tr, tbody tr:nth-child(even), tbody tr:hover { background: #ffffff !important; border-left-color: transparent !important; }
+    .badge { background: #ffffff !important; color: #000000 !important; border: 1px solid #555 !important; }
+    .table-title, .chart-title, .stat-label, .stat-icon, .report-meta, .hbar-label, .vbar-label, .empty-state-text { color: #111 !important; }
+    .hbar-value, .vbar-value { color: #000000 !important; }
+    .stat-number { color: #000000 !important; animation: none !important; }
+    .hbar-track { background: #ffffff !important; border: 1px solid #888 !important; }
+    .hbar-fill { background: #6b4f14 !important; }
+    .vbar { background: #6b4f14 !important; }
+    .stamp { color: #8a1f1f !important; border-color: #8a1f1f !important; animation: none !important; opacity: 1 !important; }
+    .report-signatures span { color: #000000 !important; }
+    .alert { background: #ffffff !important; color: #000000 !important; border: 1px solid #888 !important; }
+    a { color: #000000 !important; text-decoration: none !important; }
+    .btn { display: none !important; }
 }
 
 /* ===== АДАПТИВНОСТЬ ===== */
