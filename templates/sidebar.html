@@ -43,6 +43,17 @@
                 <a href="/admin/quality" class="sidebar-sublink {% if request.url.path == '/admin/quality' %}active{% endif %}">Качество данных</a>
             </div>
         </div>
+
+        {% if is_dev(request) %}
+        <div class="sidebar-group {% if request.url.path.startswith('/dev') %}open{% endif %}">
+            <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Служба <span class="arrow">▼</span></button>
+            <div class="sidebar-sub">
+                <a href="/dev/system" class="sidebar-sublink {% if request.url.path == '/dev/system' %}active{% endif %}">Система</a>
+                <a href="/dev/errors" class="sidebar-sublink {% if request.url.path == '/dev/errors' %}active{% endif %}">Журнал ошибок</a>
+                <a href="/dev/tools" class="sidebar-sublink {% if request.url.path == '/dev/tools' %}active{% endif %}">Резерв и сессии</a>
+            </div>
+        </div>
+        {% endif %}
     </nav>
 
     <div class="sidebar-footer">
