@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход разработчика — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="emblem-wrap">
+                <svg class="emblem" viewBox="0 0 64 64" aria-hidden="true">
+                    <path d="M32 6 L54 13 V30 C54 45 45 54 32 58 C19 54 10 45 10 30 V13 Z" fill="none" stroke="currentColor" stroke-width="3"/>
+                    <path d="M32 16 L36.4 27 L48 27.8 L39 35.2 L42.2 46.4 L32 40 L21.8 46.4 L25 35.2 L16 27.8 L27.6 27 Z" fill="currentColor"/>
+                </svg>
+            </div>
+            <h1 class="login-title">Служебный контур</h1>
+            <p class="login-subtitle">Вход разработчика системы</p>
+
+            <div class="boot-log">
+                <div class="boot-line">&gt; ЗАПРОС СЛУЖЕБНОГО ДОСТУПА...</div>
+                <div class="boot-line">&gt; ПРОВЕРКА ПОЛНОМОЧИЙ...</div>
+                <div class="boot-line">&gt; КАНАЛ ЗАШИФРОВАН</div>
+            </div>
+
+            {% if error %}
+            <div class="alert alert-error">{{ error }}</div>
+            {% endif %}
+
+            <form action="/dev/login" method="POST">
+                <div class="form-group">
+                    <label class="form-label" for="password">Пароль разработчика</label>
+                    <input class="form-input mono" type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Войти в служебный контур</button>
+            </form>
+
+            <div class="login-footer" style="display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+                <a href="/login">Вход администратора</a>
+                <a href="/">Служебная страница патруля</a>
+            </div>
+        </div>
+    </div>
+    <button class="theme-toggle floating" id="themeBtn" onclick="toggleTheme()">РЕЖИМ: НОЧЬ</button>
+</body>
+</html>
