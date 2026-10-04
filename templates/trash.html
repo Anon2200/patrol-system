@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Корзина — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Корзина</span></div>
+            </div>
+            <div class="nav-links">
+                <a href="/admin" class="nav-link nav-link-primary">← Админ-панель</a>
+            </div>
+        </div>
+
+        <div class="alert alert-error">
+            Записи хранятся в корзине {{ trash_days }} дней, затем удаляются навсегда без возможности восстановления.
+        </div>
+
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-title">Удалённые записи · {{ rows|length }}</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Удалено</th>
+                            <th>Студент</th>
+                            <th>Группа</th>
+                            <th>Тип</th>
+                            <th>Дата нарушения</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in rows %}
+                        <tr>
+                            <td><strong>{{ r.id }}</strong></td>
+                            <td class="mono">{{ r.deleted_at }}</td>
+                            <td>{{ r.student_name }}</td>
+                            <td><span class="badge badge-blue">{{ r.student_group }}</span></td>
+                            <td><span class="{{ get_badge_class(r.violation_type) }}">{{ r.violation_type }}</span></td>
+                            <td class="mono">{{ r.created_at }}</td>
+                            <td style="white-space: nowrap;">
+                                <form style="display: inline;" action="/admin/trash/restore/{{ r.id }}" method="POST">
+                                    <button type="submit" class="btn btn-success btn-sm">Восстановить</button>
+                                </form>
+                                <form style="display: inline;" action="/admin/trash/purge/{{ r.id }}" method="POST" onsubmit="return confirm('Удалить запись навсегда? Действие необратимо.');">
+                                    <button type="submit" class="btn btn-danger btn-sm">Навсегда</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">∅</div>
+                                    <div class="empty-state-text">Корзина пуста</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const toastMsg = {{ request.query_params.get('toast') | tojson }};
+        if (toastMsg) { showToast(toastMsg); }
+    </script>
+</body>
+</html>
