@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Настройки — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Настройки системы</span></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 16px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Безопасность</h3>
+            <form action="/admin/settings/pin" method="POST" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label class="form-label" for="new_pin">ПИН-код патрульного</label>
+                    <input class="form-input mono" type="text" id="new_pin" name="new_pin" required minlength="4" placeholder="Минимум 4 символа">
+                </div>
+                <button type="submit" class="btn btn-primary">Изменить ПИН</button>
+            </form>
+
+            <form action="/admin/settings/password" method="POST">
+                <div class="form-group">
+                    <label class="form-label" for="new_password">Пароль администратора</label>
+                    <input class="form-input mono" type="password" id="new_password" name="new_password" required minlength="6" placeholder="Минимум 6 символов">
+                </div>
+                <button type="submit" class="btn btn-primary">Изменить пароль</button>
+            </form>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 16px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Девианты</h3>
+            <form action="/admin/settings/deviants" method="POST" style="margin-bottom: 20px;">
+                <div class="form-group">
+                    <label class="form-label" for="min_count">Порог нарушений для статуса "Девиант"</label>
+                    <input class="form-input mono" type="number" id="min_count" name="min_count" value="{{ deviant_min }}" min="1" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Обновить порог</button>
+            </form>
+
+            <div style="border-top: 1px solid var(--line); padding-top: 16px;">
+                {% if deviants_reset_at %}
+                <p style="margin-bottom: 12px; font-size: 13px; color: var(--muted);">Учёт девиантов ведётся с: <strong class="mono">{{ deviants_reset_at }}</strong></p>
+                {% endif %}
+                <form action="/admin/settings/deviants/reset" method="POST" onsubmit="return confirm('Сбросить девиантов? Учёт начнётся с сегодняшней даты. История не удаляется.');">
+                    <button type="submit" class="btn btn-danger">Сбросить девиантов</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 16px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Типы нарушений</h3>
+            <form action="/admin/settings/types/add" method="POST" style="display: flex; gap: 10px; margin-bottom: 16px;">
+                <input class="form-input" type="text" name="name" placeholder="Новый тип нарушения" required style="flex: 1;">
+                <button type="submit" class="btn btn-primary">Добавить</button>
+            </form>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                {% for t in violation_types %}
+                <span class="badge badge-blue" style="padding: 8px 12px;">
+                    {{ t }}
+                    <form action="/admin/settings/types/delete" method="POST" style="display: inline; margin-left: 6px;" onsubmit="return confirm('Удалить тип {{ t }}?');">
+                        <input type="hidden" name="name" value="{{ t }}">
+                        <button type="submit" class="btn btn-danger btn-sm" style="padding: 2px 6px;">✕</button>
+                    </form>
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 16px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Отделения</h3>
+            <form action="/admin/settings/departments/add" method="POST" style="display: flex; gap: 10px; margin-bottom: 16px;">
+                <input class="form-input mono" type="text" name="key" placeholder="Префикс (напр. ЗЧС)" required style="width: 120px;">
+                <input class="form-input" type="text" name="name" placeholder="Название отделения" required style="flex: 1;">
+                <button type="submit" class="btn btn-primary">Добавить</button>
+            </form>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                {% for key, name in departments.items() %}
+                <span class="badge badge-green" style="padding: 8px 12px;">
+                    {{ key }} — {{ name }}
+                    <form action="/admin/settings/departments/delete" method="POST" style="display: inline; margin-left: 6px;" onsubmit="return confirm('Удалить отделение {{ key }}?');">
+                        <input type="hidden" name="key" value="{{ key }}">
+                        <button type="submit" class="btn btn-danger btn-sm" style="padding: 2px 6px;">✕</button>
+                    </form>
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const toastMsg = {{ request.query_params.get('toast') | tojson }};
+        if (toastMsg) { showToast(toastMsg); }
+    </script>
+</body>
+</html>
