@@ -11,6 +11,20 @@
         .student-link { color: var(--text); text-decoration: none; border-bottom: 1px dashed var(--muted); transition: all 0.2s ease; }
         .student-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
+        .status-select {
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 2px;
+            border: 1px solid var(--line);
+            background: var(--input-bg);
+            color: var(--text);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .status-select:hover { border-color: var(--accent); }
+
         input[type="checkbox"].row-check,
         input[type="checkbox"]#selectAll {
             appearance: none;
@@ -72,6 +86,11 @@
                 <div class="stat-label">За 7 дней</div>
             </div>
             <div class="stat-card">
+                <div class="stat-icon">// НЕОБРАБОТАНО</div>
+                <div class="stat-number">{{ kpi.unprocessed }}</div>
+                <div class="stat-label">Со статусом «Новое»</div>
+            </div>
+            <div class="stat-card">
                 <div class="stat-icon">// ДЕВИАНТЫ</div>
                 <div class="stat-number">{{ kpi.deviants }}</div>
                 <div class="stat-label">Активных</div>
@@ -98,6 +117,7 @@
             <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;">
                 <a href="/admin?date_from={{ today_str }}&date_to={{ today_str }}" class="btn btn-secondary btn-sm">Сегодня</a>
                 <a href="/admin?date_from={{ monday_str }}" class="btn btn-secondary btn-sm">Эта неделя</a>
+                <a href="/admin?status=new" class="btn btn-secondary btn-sm">Необработанные</a>
                 <a href="/admin?has_comment=1" class="btn btn-secondary btn-sm">С комментариями</a>
                 <a href="/admin/deviants" class="btn btn-secondary btn-sm">Девианты</a>
                 <a href="/admin" class="btn btn-secondary btn-sm">Сбросить</a>
@@ -126,6 +146,15 @@
                     </select>
                 </div>
                 <div class="form-group" style="margin: 0;">
+                    <label class="form-label" for="status">Статус</label>
+                    <select class="form-select" id="status" name="status">
+                        <option value="">Все статусы</option>
+                        {% for key, label in status_labels.items() %}
+                        <option value="{{ key }}" {% if status_filter == key %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group" style="margin: 0;">
                     <label class="form-label" for="date_from">С даты</label>
                     <input class="form-input mono" type="date" id="date_from" name="date_from" value="{{ date_from_filter }}">
                 </div>
@@ -149,7 +178,7 @@
                         <input type="file" name="file" accept=".csv" class="form-input" style="max-width: 240px; padding: 6px 10px;">
                         <button type="submit" class="btn btn-secondary">Восстановить</button>
                     </form>
-                    <a href="/admin/export?student_name={{ name_filter }}&group={{ group_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}&q={{ q_filter }}" class="btn btn-success">Экспорт CSV</a>
+                    <a href="/admin/export?student_name={{ name_filter }}&group={{ group_filter }}&violation_type={{ type_filter }}&date_from={{ date_from_filter }}&date_to={{ date_to_filter }}&q={{ q_filter }}&status={{ status_filter }}" class="btn btn-success">Экспорт CSV</a>
                 </div>
             </div>
             <div class="table-wrapper">
@@ -163,6 +192,7 @@
                             <th><a class="th-link" href="{{ sort_urls['student_name'] }}">Студент {% if sort == 'student_name' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
                             <th><a class="th-link" href="{{ sort_urls['student_group'] }}">Группа {% if sort == 'student_group' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
                             <th><a class="th-link" href="{{ sort_urls['violation_type'] }}">Тип {% if sort == 'violation_type' %}{{ '↑' if dir == 'asc' else '↓' }}{% endif %}</a></th>
+                            <th>Статус</th>
                             <th>Комментарий</th>
                             <th></th>
                         </tr>
@@ -182,17 +212,26 @@
                             </td>
                             <td><span class="badge badge-blue">{{ v.student_group }}</span></td>
                             <td><span class="{{ get_badge_class(v.violation_type) }}">{{ v.violation_type }}</span></td>
+                            <td>
+                                <form action="/admin/status/{{ v.id }}" method="POST" style="display: inline;">
+                                    <select name="status" class="status-select" onchange="this.form.submit()">
+                                        {% for key, label in status_labels.items() %}
+                                        <option value="{{ key }}" {% if (v.status or 'new') == key %}selected{% endif %}>{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </form>
+                            </td>
                             <td>{{ v.comment or "—" }}</td>
                             <td style="white-space: nowrap;">
                                 <a href="/admin/edit/{{ v.id }}" class="btn btn-secondary btn-sm" title="Редактировать">Правка</a>
-                                <form style="display: inline;" action="/admin/delete/{{ v.id }}" method="POST" onsubmit="return confirm('Удалить запись?');">
-                                    <button type="submit" class="btn btn-danger btn-sm" title="Удалить">Удалить</button>
+                                <form style="display: inline;" action="/admin/delete/{{ v.id }}" method="POST" onsubmit="return confirm('Переместить запись в корзину?');">
+                                    <button type="submit" class="btn btn-danger btn-sm" title="В корзину">Удалить</button>
                                 </form>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="9">
+                            <td colspan="10">
                                 <div class="empty-state">
                                     <div class="empty-state-icon">∅</div>
                                     <div class="empty-state-text">Нарушения не найдены</div>
@@ -249,7 +288,7 @@
         function bulkDelete() {
             const ids = getSelectedIds();
             if (!ids.length) { alert('Выберите хотя бы одну запись'); return; }
-            if (!confirm('Удалить выбранные записи: ' + ids.length + '?')) return;
+            if (!confirm('Переместить выбранные записи в корзину: ' + ids.length + '?')) return;
             submitIds('/admin/bulk/delete', ids);
         }
 
