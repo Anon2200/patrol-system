@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
 
-APP_VERSION = "4.6 (статусы убраны, корзина и журнал только у разработчика)"
+APP_VERSION = "5.0 (тревожные, докладная, динамика, служебные инструменты)"
 START_TIME = datetime.now()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
@@ -39,6 +39,13 @@ DEV_PASSWORD = os.environ.get("DEV_PASSWORD", "developer")
 ADMIN_LABEL = "АДМИНИСТРАТОР"
 
 TRASH_DAYS = 30
+
+DEFAULT_FLAGS = {
+    "offline_queue": True,
+    "live_check": True,
+    "dup_control": True,
+    "hq_refresh": True,
+}
 
 DEFAULT_PATROL_NAMES = [
     "Борисов",
@@ -202,6 +209,19 @@ def init_db() -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS access_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            ip TEXT,
+            method TEXT,
+            path TEXT,
+            status INTEGER,
+            ms INTEGER
+        )
+        """
+    )
     cols = [r["name"] for r in conn.execute("PRAGMA table_info(violations)").fetchall()]
     if "status" not in cols:
         conn.execute("ALTER TABLE violations ADD COLUMN status TEXT DEFAULT 'new'")
@@ -332,7 +352,7 @@ def clear_fails(ip: str) -> None:
     LOGIN_ATTEMPTS.pop(ip, None)
 
 # ---------------------------------------------------------------------------
-# Настройки (meta) и справочники
+# Настройки (meta), справочники, флаги функций
 # ---------------------------------------------------------------------------
 def get_meta(key: str, default: str = "") -> str:
     conn = get_db_connection()
@@ -348,6 +368,16 @@ def set_meta(key: str, value: str) -> None:
     )
     conn.commit()
     conn.close()
+
+def get_flags():
+    raw = get_meta("feature_flags")
+    flags = dict(DEFAULT_FLAGS)
+    if raw:
+        try:
+            flags.update(json.loads(raw))
+        except ValueError:
+            pass
+    return flags
 
 def get_pin() -> str:
     return get_meta("patrol_pin") or PATROL_PIN
@@ -541,6 +571,10 @@ def patrol_home(request: Request):
         "SELECT duration_minutes FROM shifts WHERE patrol_name = ? AND ended_at IS NOT NULL AND started_at >= ?",
         (patrol_name, month_ago + " 00:00:00"),
     ).fetchall()
+    my_today = conn.execute(
+        "SELECT * FROM violations WHERE deleted_at IS NULL AND patrol_name = ? AND created_at >= ? ORDER BY created_at DESC",
+        (patrol_name, today + " 00:00:00"),
+    ).fetchall()
     conn.close()
     duty_names = [r["patrol_name"] for r in duty_rows]
     return templates.TemplateResponse(
@@ -557,6 +591,10 @@ def patrol_home(request: Request):
             "open_shift": open_shift["started_at"] if open_shift else None,
             "my_shifts_count": len(my_shifts),
             "my_hours": round(sum(r["duration_minutes"] or 0 for r in my_shifts) / 60, 1),
+            "my_today_count": len(my_today),
+            "my_last_time": my_today[0]["created_at"][11:16] if my_today else "",
+            "my_recent": my_today[:5],
+            "flags_json": json.dumps(get_flags(), ensure_ascii=False),
         },
     )
 
@@ -671,16 +709,19 @@ def add_violation(
 
     student_name_clean = student_name.strip()
     today = datetime.now().strftime("%Y-%m-%d")
+    flags = get_flags()
 
-    conn = get_db_connection()
-    dup = conn.execute(
-        "SELECT id FROM violations WHERE deleted_at IS NULL AND lower(student_name) = lower(?) AND violation_type = ? AND created_at >= ?",
-        (student_name_clean, violation_type, today + " 00:00:00"),
-    ).fetchone()
+    dup = None
+    if flags.get("dup_control", True):
+        conn = get_db_connection()
+        dup = conn.execute(
+            "SELECT id FROM violations WHERE deleted_at IS NULL AND lower(student_name) = lower(?) AND violation_type = ? AND created_at >= ?",
+            (student_name_clean, violation_type, today + " 00:00:00"),
+        ).fetchone()
+        conn.close()
 
     if dup and dup_confirm != "1":
         known = get_known_students()
-        conn.close()
         return templates.TemplateResponse(
             "patrol.html",
             {
@@ -700,10 +741,15 @@ def add_violation(
                 "open_shift": None,
                 "my_shifts_count": 0,
                 "my_hours": 0,
+                "my_today_count": 0,
+                "my_last_time": "",
+                "my_recent": [],
+                "flags_json": json.dumps(flags, ensure_ascii=False),
             },
         )
 
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db_connection()
     conn.execute(
         """
         INSERT INTO violations
@@ -1871,7 +1917,7 @@ def admin_export(
     )
 
 # ---------------------------------------------------------------------------
-# Статистика
+# Статистика со сравнением периодов
 # ---------------------------------------------------------------------------
 @app.get("/stats", response_class=HTMLResponse)
 def stats_page(request: Request):
@@ -1885,10 +1931,13 @@ def stats_page(request: Request):
     departments = get_departments()
     now = datetime.now()
     today_str = now.strftime("%Y-%m-%d")
+    yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
     week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
     month_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
     this_monday = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
     last_monday = (now - timedelta(days=now.weekday() + 7)).strftime("%Y-%m-%d")
+    cur_month = today_str[:7]
+    prev_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
 
     days = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(13, -1, -1)]
     heat_days = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(179, -1, -1)]
@@ -1906,29 +1955,43 @@ def stats_page(request: Request):
 
     total = len(rows)
     today_count = 0
+    yesterday_count = 0
     week_count = 0
     month_count = 0
     this_week_count = 0
     last_week_count = 0
+    cur_month_count = 0
+    prev_month_count = 0
+    week_types = Counter()
+    prev_week_types = Counter()
 
     for row in rows:
         day = row["created_at"][:10]
+        month = row["created_at"][:7]
         dt = datetime.strptime(day, "%Y-%m-%d")
         wd = dt.weekday()
         if day == today_str:
             today_count += 1
+        if day == yesterday_str:
+            yesterday_count += 1
         if day >= week_ago:
             week_count += 1
         if day >= month_ago:
             month_count += 1
+        if month == cur_month:
+            cur_month_count += 1
+        if month == prev_month:
+            prev_month_count += 1
         if day in by_day:
             by_day[day] += 1
         if day in heat:
             heat[day] += 1
         if day >= this_monday:
             this_week_count += 1
+            week_types[row["violation_type"]] += 1
         elif day >= last_monday:
             last_week_count += 1
+            prev_week_types[row["violation_type"]] += 1
         by_weekday[wd] += 1
         try:
             by_hour[int(row["created_at"][11:13])] += 1
@@ -1954,6 +2017,11 @@ def stats_page(request: Request):
         week_delta = round((this_week_count - last_week_count) / last_week_count * 100)
     else:
         week_delta = None
+
+    type_compare = [
+        (t, week_types.get(t, 0), prev_week_types.get(t, 0))
+        for t in sorted(set(week_types) | set(prev_week_types))
+    ]
 
     hours = list(range(7, 21))
     top_groups = by_group.most_common(5)
@@ -2002,11 +2070,17 @@ def stats_page(request: Request):
             "request": request,
             "total": total,
             "today_count": today_count,
+            "yesterday_count": yesterday_count,
             "week_count": week_count,
             "month_count": month_count,
             "this_week_count": this_week_count,
             "last_week_count": last_week_count,
             "week_delta": week_delta,
+            "cur_month_count": cur_month_count,
+            "prev_month_count": prev_month_count,
+            "cur_month_label": cur_month,
+            "prev_month_label": prev_month,
+            "type_compare": type_compare,
             "top_patrols": by_patrol.most_common(),
             "top_students": top_students,
             "risk_weekday": ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"][cur_wd],
@@ -2026,7 +2100,10 @@ def stats_page(request: Request):
 def hq_page(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse("hq.html", {"request": request})
+    return templates.TemplateResponse(
+        "hq.html",
+        {"request": request, "flags_json": json.dumps(get_flags(), ensure_ascii=False)},
+    )
 
 @app.get("/hq/data")
 def hq_data(request: Request):
@@ -2066,7 +2143,10 @@ def hq_data(request: Request):
         ),
         media_type="application/json",
     )
+
 # ---------------------------------------------------------------------------
-# Бот мессенджера MAX (запускается только при заданном MAX_BOT_TOKEN)
+# Служебные расширения: монитор, техработы, флаги, тревожные, докладная
 # ---------------------------------------------------------------------------
-import maxbot  # noqa: E402,F401
+import devext  # noqa: E402
+
+devext.register(app, templates)
