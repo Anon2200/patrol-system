@@ -31,7 +31,10 @@
     <div class="hq-wrap">
         <div class="hq-top">
             <div class="hq-title">Оперативный монитор · Штаб</div>
-            <div class="hq-clock mono" id="hqClock">--.--.---- --:--:--</div>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <span class="badge badge-gray" id="hqMode">Автообновление</span>
+                <div class="hq-clock mono" id="hqClock">--.--.---- --:--:--</div>
+            </div>
         </div>
 
         <div class="hq-grid">
@@ -56,12 +59,15 @@
             <div id="hqFeed"><div class="hq-empty">Ожидание данных...</div></div>
         </div>
 
-        <div style="margin-top: 20px;">
+        <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="hqRefresh()">Обновить сейчас</button>
             <a href="/admin" class="btn btn-secondary btn-sm">← Вернуться в панель</a>
         </div>
     </div>
 
     <script>
+        const hqFlags = {{ flags_json | safe }};
+
         async function hqRefresh() {
             try {
                 const r = await fetch('/hq/data');
@@ -91,8 +97,14 @@
                 /* тишина до следующего обновления */
             }
         }
+
         hqRefresh();
-        setInterval(hqRefresh, 20000);
+        if (hqFlags.hq_refresh) {
+            setInterval(hqRefresh, 20000);
+        } else {
+            document.getElementById('hqMode').textContent = 'Автообновление отключено';
+            document.getElementById('hqMode').className = 'badge badge-orange';
+        }
     </script>
 </body>
 </html>
