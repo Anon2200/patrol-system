@@ -12,6 +12,10 @@ import time
 from collections import Counter
 from datetime import datetime, timedelta
 from email.message import EmailMessage
+from typing import Optional
+
+from fastapi import Form, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 import main as M
 
@@ -36,7 +40,7 @@ p { color: #8593a2; line-height: 1.7; font-size: 14px; }
 # ---------------------------------------------------------------------------
 # Промежуточные слои
 # ---------------------------------------------------------------------------
-async def access_log_mw(request, call_next):
+async def access_log_mw(request: Request, call_next):
     start = time.time()
     response = await call_next(request)
     try:
@@ -52,20 +56,19 @@ async def access_log_mw(request, call_next):
         pass
     return response
 
-async def maintenance_mw(request, call_next):
+async def maintenance_mw(request: Request, call_next):
     path = request.url.path
     if M.get_meta("maintenance", "0") == "1":
         if not path.startswith("/dev") and not path.startswith("/static") and path not in ("/sw.js", "/manifest.webmanifest"):
             role = M.verify_signed(request.cookies.get(M.COOKIE_AUTH_ROLE))
             if role != "dev":
-                from fastapi.responses import HTMLResponse
                 return HTMLResponse(content=MAINTENANCE_PAGE, status_code=503)
     return await call_next(request)
 
 # ---------------------------------------------------------------------------
 # Служебные страницы разработчика
 # ---------------------------------------------------------------------------
-def dev_health(request):
+def dev_health(request: Request):
     ok = True
     try:
         conn = M.get_db_connection()
@@ -73,15 +76,13 @@ def dev_health(request):
         conn.close()
     except Exception:
         ok = False
-    from fastapi.responses import HTMLResponse
     return HTMLResponse(
         content=json.dumps({"ok": ok, "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "version": M.APP_VERSION}, ensure_ascii=False),
         media_type="application/json",
     )
 
-def dev_monitor(request):
+def dev_monitor(request: Request):
     if not M.is_dev(request):
-        from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/dev/login", status_code=303)
     conn = M.get_db_connection()
     conn.execute("DELETE FROM access_log WHERE id NOT IN (SELECT id FROM access_log ORDER BY id DESC LIMIT 500)")
@@ -98,9 +99,8 @@ def dev_monitor(request):
         {"request": request, "recent": recent, "routes": routes},
     )
 
-def dev_selftest(request):
+def dev_selftest(request: Request):
     if not M.is_dev(request):
-        from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/dev/login", status_code=303)
     checks = []
 
@@ -135,9 +135,8 @@ def dev_selftest(request):
         {"request": request, "checks": checks, "version": M.APP_VERSION},
     )
 
-def dev_controls(request):
+def dev_controls(request: Request):
     if not M.is_dev(request):
-        from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/dev/login", status_code=303)
     return _TPL.TemplateResponse(
         "dev_controls.html",
@@ -148,27 +147,16 @@ def dev_controls(request):
         },
     )
 
-def dev_controls_maintenance(request, state: str = M.Form(...)):
+def dev_controls_maintenance(request: Request, state: str = Form(...)):
     if not M.is_dev(request):
-        from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/dev/login", status_code=303)
     value = "1" if state == "on" else "0"
     M.set_meta("maintenance", value)
     M.log_action(request, "режим техработ", "включён" if value == "1" else "выключен")
     return M.toast_redirect("/dev/controls", "Режим техработ: " + ("включён" if value == "1" else "выключен"))
 
-def dev_controls_flags(request):
+async def dev_controls_flags_post(request: Request):
     if not M.is_dev(request):
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url="/dev/login", status_code=303)
-    flags = {key: bool(request.form if False else False) for key in []}
-    form_keys = ["offline_queue", "live_check", "dup_control", "hq_refresh"]
-    flags = {key: False for key in form_keys}
-    return flags
-
-async def dev_controls_flags_post(request):
-    if not M.is_dev(request):
-        from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/dev/login", status_code=303)
     form = await request.form()
     flags = {key: (form.get(key) == "on") for key in ["offline_queue", "live_check", "dup_control", "hq_refresh"]}
@@ -220,7 +208,7 @@ def compute_alerts():
     alerts.sort(key=lambda x: x["count"], reverse=True)
     return alerts
 
-def alerts_text():
+def alerts_text() -> str:
     alerts = compute_alerts()
     if not alerts:
         return "Тревожных студентов за последние 7 дней не выявлено."
@@ -229,9 +217,8 @@ def alerts_text():
         lines.append(f"- {a['name']} ({a['groups']}): {a['reasons']}; типы: {a['types']}; последнее: {a['last'][:10]}.")
     return "\n".join(lines)
 
-def admin_alerts(request):
+def admin_alerts(request: Request):
     if not M.is_admin(request):
-        from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/login", status_code=303)
     return _TPL.TemplateResponse(
         "alerts.html",
@@ -244,9 +231,8 @@ def admin_alerts(request):
         },
     )
 
-async def admin_alerts_emails(request):
+async def admin_alerts_emails(request: Request):
     if not M.is_admin(request):
-        from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/login", status_code=303)
     form = await request.form()
     emails = (form.get("emails") or "").strip()
@@ -254,9 +240,13 @@ async def admin_alerts_emails(request):
     M.log_action(request, "смена списка почтовой рассылки", emails[:200])
     return M.toast_redirect("/admin/alerts", "Список адресов сохранён")
 
-def admin_memo(request, date_from: str = None, date_to: str = None, department: str = None):
+def admin_memo(
+    request: Request,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    department: Optional[str] = None,
+):
     if not M.is_admin(request):
-        from fastapi.responses import RedirectResponse
         return RedirectResponse(url="/login", status_code=303)
     now = datetime.now()
     if not date_from:
@@ -342,8 +332,6 @@ def register(app, templates):
 
     app.middleware("http")(maintenance_mw)
     app.middleware("http")(access_log_mw)
-
-    from fastapi.responses import HTMLResponse
 
     app.get("/dev/health")(dev_health)
     app.get("/dev/monitor", response_class=HTMLResponse)(dev_monitor)
