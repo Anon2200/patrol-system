@@ -27,13 +27,13 @@ from starlette.background import BackgroundTask
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # ---------------------------------------------------------------------------
-# Конфигурация
+# КОНФИГУРАЦИЯ
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
 
-APP_VERSION = "6.0 (Full Standalone)"
+APP_VERSION = "6.1 (Standalone Stable)"
 START_TIME = datetime.now()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
@@ -101,7 +101,7 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 # ---------------------------------------------------------------------------
-# Middleware: Безопасность, Техработы, Логирование
+# MIDDLEWARE: Безопасность, Техработы, Логирование
 # ---------------------------------------------------------------------------
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
@@ -137,16 +137,12 @@ p { color: #8593a2; line-height: 1.7; font-size: 14px; }
 @app.middleware("http")
 async def maintenance_mw(request: Request, call_next):
     path = request.url.path
-    # Разрешаем доступ разработчику всегда, даже в режиме техработ
     role = verify_signed(request.cookies.get(COOKIE_AUTH_ROLE))
     if role == "dev":
         return await call_next(request)
-    
-    # Режим техработ для всех остальных
     if get_meta("maintenance", "0") == "1":
         if not path.startswith("/dev") and not path.startswith("/static") and path not in ("/sw.js", "/manifest.webmanifest"):
             return HTMLResponse(content=MAINTENANCE_HTML, status_code=503)
-            
     return await call_next(request)
 
 @app.middleware("http")
@@ -167,7 +163,7 @@ async def access_log_mw(request: Request, call_next):
     return response
 
 # ---------------------------------------------------------------------------
-# База данных
+# БАЗА ДАННЫХ
 # ---------------------------------------------------------------------------
 def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, timeout=10)
@@ -176,91 +172,95 @@ def get_db_connection() -> sqlite3.Connection:
 
 def init_db() -> None:
     conn = get_db_connection()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS violations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patrol_name TEXT NOT NULL,
-            student_name TEXT NOT NULL,
-            student_group TEXT NOT NULL,
-            violation_type TEXT NOT NULL,
-            comment TEXT,
-            created_at TEXT NOT NULL,
-            status TEXT DEFAULT 'new',
-            deleted_at TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS patrol_members (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL UNIQUE
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS duty_schedule (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            duty_date TEXT NOT NULL,
-            patrol_name TEXT NOT NULL,
-            UNIQUE(duty_date, patrol_name)
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS shifts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patrol_name TEXT NOT NULL,
-            started_at TEXT NOT NULL,
-            ended_at TEXT,
-            duration_minutes INTEGER
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS meta (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS error_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL,
-            path TEXT,
-            message TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS audit_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL,
-            actor TEXT,
-            role TEXT,
-            action TEXT,
-            details TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS access_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts TEXT NOT NULL,
-            ip TEXT,
-            method TEXT,
-            path TEXT,
-            status INTEGER,
-            ms INTEGER
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS support_tickets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL,
-            reporter_role TEXT NOT NULL,
-            reporter_contact TEXT,
-            subject TEXT NOT NULL,
-            description TEXT NOT NULL,
-            screenshot_path TEXT,
-            status TEXT DEFAULT 'open',
-            resolution_note TEXT,
-            updated_at TEXT
-        )
-    """)
+    tables = {
+        "violations": """
+            CREATE TABLE IF NOT EXISTS violations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patrol_name TEXT NOT NULL,
+                student_name TEXT NOT NULL,
+                student_group TEXT NOT NULL,
+                violation_type TEXT NOT NULL,
+                comment TEXT,
+                created_at TEXT NOT NULL,
+                status TEXT DEFAULT 'new',
+                deleted_at TEXT
+            )
+        """,
+        "patrol_members": """
+            CREATE TABLE IF NOT EXISTS patrol_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            )
+        """,
+        "duty_schedule": """
+            CREATE TABLE IF NOT EXISTS duty_schedule (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                duty_date TEXT NOT NULL,
+                patrol_name TEXT NOT NULL,
+                UNIQUE(duty_date, patrol_name)
+            )
+        """,
+        "shifts": """
+            CREATE TABLE IF NOT EXISTS shifts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patrol_name TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                duration_minutes INTEGER
+            )
+        """,
+        "meta": """
+            CREATE TABLE IF NOT EXISTS meta (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """,
+        "error_log": """
+            CREATE TABLE IF NOT EXISTS error_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                path TEXT,
+                message TEXT
+            )
+        """,
+        "audit_log": """
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                actor TEXT,
+                role TEXT,
+                action TEXT,
+                details TEXT
+            )
+        """,
+        "access_log": """
+            CREATE TABLE IF NOT EXISTS access_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts TEXT NOT NULL,
+                ip TEXT,
+                method TEXT,
+                path TEXT,
+                status INTEGER,
+                ms INTEGER
+            )
+        """,
+        "support_tickets": """
+            CREATE TABLE IF NOT EXISTS support_tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                reporter_role TEXT NOT NULL,
+                reporter_contact TEXT,
+                subject TEXT NOT NULL,
+                description TEXT NOT NULL,
+                screenshot_path TEXT,
+                status TEXT DEFAULT 'open',
+                resolution_note TEXT,
+                updated_at TEXT
+            )
+        """
+    }
+    for sql in tables.values():
+        conn.execute(sql)
     
     cols = [r["name"] for r in conn.execute("PRAGMA table_info(violations)").fetchall()]
     if "deleted_at" not in cols:
@@ -281,7 +281,7 @@ def on_startup() -> None:
     print(f"MAIN.PY LOADED SUCCESSFULLY. VERSION: {APP_VERSION}", flush=True)
 
 # ---------------------------------------------------------------------------
-# Журналы и защита
+# ЖУРНАЛЫ И ЗАЩИТА
 # ---------------------------------------------------------------------------
 def log_error(path: str, message: str) -> None:
     try:
@@ -354,19 +354,25 @@ def register_fail(ip: str) -> None: LOGIN_ATTEMPTS.setdefault(ip, []).append(tim
 def clear_fails(ip: str) -> None: LOGIN_ATTEMPTS.pop(ip, None)
 
 # ---------------------------------------------------------------------------
-# Настройки и справочники
+# НАСТРОЙКИ И СПРАВОЧНИКИ
 # ---------------------------------------------------------------------------
 def get_meta(key: str, default: str = "") -> str:
-    conn = get_db_connection()
-    row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
-    conn.close()
-    return row["value"] if row and row["value"] is not None else default
+    try:
+        conn = get_db_connection()
+        row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+        conn.close()
+        return row["value"] if row and row["value"] is not None else default
+    except Exception:
+        return default
 
 def set_meta(key: str, value: str) -> None:
-    conn = get_db_connection()
-    conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
-    conn.commit()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        conn.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (key, value))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 def get_flags():
     raw = get_meta("feature_flags")
@@ -403,7 +409,7 @@ def get_departments():
     return dict(DEPARTMENTS)
 
 # ---------------------------------------------------------------------------
-# Роли и вспомогательные функции
+# РОЛИ И ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 # ---------------------------------------------------------------------------
 def get_role(request: Request) -> Optional[str]:
     role = verify_signed(request.cookies.get(COOKIE_AUTH_ROLE))
@@ -489,7 +495,7 @@ def render_csv(rows) -> str:
     return buffer.getvalue()
 
 # ---------------------------------------------------------------------------
-# Маршруты патрульного
+# МАРШРУТЫ ПАТРУЛЬНОГО
 # ---------------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def patrol_home(request: Request):
@@ -591,7 +597,7 @@ def add_violation(request: Request, student_group: str = Form(...), student_name
     return toast_redirect("/", "Нарушение сохранено ✓")
 
 # ---------------------------------------------------------------------------
-# Служебные проверки
+# СЛУЖЕБНЫЕ ПРОВЕРКИ
 # ---------------------------------------------------------------------------
 @app.get("/check/student")
 def check_student(request: Request, name: str = ""):
@@ -624,7 +630,7 @@ def check_dossier(request: Request, name: str = ""):
     return HTMLResponse(content=json.dumps({"ok": True, "items": items}, ensure_ascii=False), media_type="application/json")
 
 # ---------------------------------------------------------------------------
-# Входы: администратор и разработчик
+# ВХОДЫ: АДМИНИСТРАТОР И РАЗРАБОТЧИК (ИСПРАВЛЕНО)
 # ---------------------------------------------------------------------------
 @app.get("/help", response_class=HTMLResponse)
 def help_page(request: Request):
@@ -635,21 +641,60 @@ def help_page(request: Request):
 
 @app.get("/login", response_class=HTMLResponse)
 def admin_login_form(request: Request):
-    if is_admin(request): return RedirectResponse(url="/admin", status_code=303)
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    """Показывает форму входа. Если уже залогинен — редирект в панель."""
+    try:
+        if is_admin(request):
+            return RedirectResponse(url="/admin", status_code=303)
+        
+        template_name = "login.html"
+        if not os.path.exists(BASE_DIR / "templates" / template_name):
+             return HTMLResponse(content="<h1>Ошибка: шаблон login.html не найден</h1>", status_code=500)
+
+        return templates.TemplateResponse(template_name, {"request": request, "error": None})
+    except Exception as e:
+        log_error("login_get", str(e))
+        return HTMLResponse(content=f"<h1>Ошибка загрузки формы входа</h1><p>{e}</p>", status_code=500)
 
 @app.post("/login")
 def admin_login(request: Request, password: str = Form(...)):
+    """Обрабатывает отправку формы входа."""
     ip = get_client_ip(request)
-    if rate_limited(ip): return templates.TemplateResponse("login.html", {"request": request, "error": "Слишком много попыток входа."}, status_code=429)
-    if password == get_admin_password(): role = "admin"
+    
+    if rate_limited(ip):
+        return templates.TemplateResponse(
+            "login.html", 
+            {"request": request, "error": "Слишком много неудачных попыток. Подождите 10 минут."}, 
+            status_code=429
+        )
+    
+    current_admin_pass = get_admin_password()
+    current_dev_pass = get_dev_password()
+    
+    if password == current_admin_pass:
+        role = "admin"
+    elif password == current_dev_pass:
+        role = "dev"
     else:
-        register_fail(ip); log_action(request, "вход в админку: отказ", f"IP {ip}")
-        error = "Это пароль разработчика." if password == get_dev_password() else "Неверный пароль."
-        return templates.TemplateResponse("login.html", {"request": request, "error": error}, status_code=400)
-    clear_fails(ip); log_action(request, "вход в админку", f"роль {role}, IP {ip}")
+        register_fail(ip)
+        log_action(request, "вход в админку: отказ", f"IP {ip}")
+        error_msg = "Неверный пароль."
+        return templates.TemplateResponse(
+            "login.html", 
+            {"request": request, "error": error_msg}, 
+            status_code=400
+        )
+    
+    clear_fails(ip)
+    log_action(request, "успешный вход", f"роль {role}, IP {ip}")
+    
     response = RedirectResponse(url="/admin", status_code=303)
-    response.set_cookie(key=COOKIE_AUTH_ROLE, value=sign_value(role), httponly=True, samesite="lax", secure=True)
+    response.set_cookie(
+        key=COOKIE_AUTH_ROLE,
+        value=sign_value(role),
+        httponly=True,
+        samesite="lax",
+        secure=True
+    )
     return response
 
 @app.get("/dev/login", response_class=HTMLResponse)
@@ -678,7 +723,7 @@ def admin_logout():
     return response
 
 # ---------------------------------------------------------------------------
-# Система обращений к разработчику (Support Tickets)
+# СИСТЕМА ОБРАЩЕНИЙ К РАЗРАБОТЧИКУ (SUPPORT TICKETS)
 # ---------------------------------------------------------------------------
 @app.get("/support/new", response_class=HTMLResponse)
 def support_new_form(request: Request):
@@ -740,7 +785,7 @@ def dev_tickets_update(request: Request, ticket_id: int, status: str = Form(...)
     return toast_redirect("/dev/tickets", f"Статус тикета #{ticket_id} изменён на '{status}'")
 
 # ---------------------------------------------------------------------------
-# Админ-панель (основной список нарушений)
+# АДМИН-ПАНЕЛЬ (ОСНОВНОЙ СПИСОК НАРУШЕНИЙ)
 # ---------------------------------------------------------------------------
 @app.get("/admin", response_class=HTMLResponse)
 def admin_panel(request: Request, student_name: Optional[str] = None, group: Optional[str] = None, violation_type: Optional[str] = None, date_from: Optional[str] = None, date_to: Optional[str] = None, q: Optional[str] = None, has_comment: Optional[str] = None, page: int = 1, sort: str = "created_at", dir: str = "desc"):
@@ -1144,7 +1189,7 @@ def admin_export(request: Request, student_name: Optional[str] = None, group: Op
     return StreamingResponse(iter([render_csv(rows)]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 # ---------------------------------------------------------------------------
-# Статистика со сравнением периодов
+# СТАТИСТИКА СО СРАВНЕНИЕМ ПЕРИОДОВ
 # ---------------------------------------------------------------------------
 @app.get("/stats", response_class=HTMLResponse)
 def stats_page(request: Request):
@@ -1223,7 +1268,7 @@ def stats_page(request: Request):
     })
 
 # ---------------------------------------------------------------------------
-# Оперативный монитор «Штаб»
+# ОПЕРАТИВНЫЙ МОНИТОР «ШТАБ»
 # ---------------------------------------------------------------------------
 @app.get("/hq", response_class=HTMLResponse)
 def hq_page(request: Request):
@@ -1245,7 +1290,7 @@ def hq_data(request: Request):
     return HTMLResponse(content=json.dumps({"ok": True, "today": today_count, "week": week_count, "on_duty": [r["patrol_name"] for r in duty_rows], "open_shifts": open_shifts, "feed": feed, "clock": now.strftime("%d.%m.%Y %H:%M:%S")}, ensure_ascii=False), media_type="application/json")
 
 # ---------------------------------------------------------------------------
-# Служебный контур разработчика (System, Errors, Tools, Backup, Trash, Audit)
+# СЛУЖЕБНЫЙ КОНТУР РАЗРАБОТЧИКА (SYSTEM, ERRORS, TOOLS, BACKUP, TRASH, AUDIT)
 # ---------------------------------------------------------------------------
 @app.get("/dev/system", response_class=HTMLResponse)
 def dev_system(request: Request):
@@ -1357,7 +1402,7 @@ def admin_audit(request: Request):
     return templates.TemplateResponse("audit.html", {"request": request, "rows": rows})
 
 # ---------------------------------------------------------------------------
-# Тревожные студенты и докладная записка
+# ТРЕВОЖНЫЕ СТУДЕНТЫ И ДОКЛАДНАЯ ЗАПИСКА
 # ---------------------------------------------------------------------------
 def compute_alerts():
     now = datetime.now(); week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d"); today = now.strftime("%Y-%m-%d")
@@ -1416,7 +1461,7 @@ def admin_memo(request: Request, date_from: Optional[str] = None, date_to: Optio
     return templates.TemplateResponse("memo.html", {"request": request, "org": org, "period_start": date_from, "period_end": date_to, "generated": now.strftime("%d.%m.%Y"), "total": len(rows), "by_type": by_type.most_common(), "top_students": by_student.most_common(5), "dept_name": departments.get(department or "", "")})
 
 # ---------------------------------------------------------------------------
-# Монитор запросов, Самотест, Режимы и Флаги
+# МОНИТОР ЗАПРОСОВ, САМОТЕСТ, РЕЖИМЫ И ФЛАГИ
 # ---------------------------------------------------------------------------
 @app.get("/dev/health")
 def dev_health(request: Request):
@@ -1488,7 +1533,7 @@ async def dev_controls_flags_post(request: Request):
     return toast_redirect("/dev/controls", "Флаги функций сохранены")
 
 # ---------------------------------------------------------------------------
-# Планировщик задач (Email Alerts)
+# ПЛАНИРОВЩИК ЗАДАЧ (EMAIL ALERTS)
 # ---------------------------------------------------------------------------
 def send_alert_email(text: str) -> bool:
     host = os.environ.get("SMTP_HOST")
@@ -1519,7 +1564,7 @@ def scheduler_loop():
                 text = alerts_text()
                 if send_alert_email(text):
                     set_meta("last_alert_send", today)
-                    print("DEVEXT: тревожная сводка отправлена", flush=True)
+                    print("SCHEDULER: тревожная сводка отправлена", flush=True)
         except Exception: pass
         time.sleep(600)
 
