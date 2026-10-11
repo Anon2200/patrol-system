@@ -16,8 +16,9 @@
                 <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
                 <div class="page-title"><span>Отчёт за период</span></div>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button class="btn btn-secondary" onclick="copySummary()">Скопировать сводку</button>
+                <a class="btn btn-secondary" href="/admin/memo?date_from={{ period_start }}&date_to={{ period_end }}&department={{ dept_filter }}">Докладная</a>
                 <button class="btn btn-primary" onclick="window.print()">Печать</button>
             </div>
         </div>
@@ -108,17 +109,17 @@
             const src = document.getElementById('summarySrc');
             const txt = src.value;
             function done() { showToast('Сводка скопирована в буфер'); }
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(txt).then(done).catch(function () { fallback(); });
-            } else {
-                fallback();
-            }
             function fallback() {
                 src.style.display = 'block';
                 src.select();
                 document.execCommand('copy');
                 src.style.display = 'none';
                 done();
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(txt).then(done).catch(fallback);
+            } else {
+                fallback();
             }
         }
     </script>
