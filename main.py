@@ -33,7 +33,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
 
-APP_VERSION = "6.1 (Standalone Stable)"
+APP_VERSION = "6.2 (Stable Login Fix)"
 START_TIME = datetime.now()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
@@ -630,7 +630,7 @@ def check_dossier(request: Request, name: str = ""):
     return HTMLResponse(content=json.dumps({"ok": True, "items": items}, ensure_ascii=False), media_type="application/json")
 
 # ---------------------------------------------------------------------------
-# ВХОДЫ: АДМИНИСТРАТОР И РАЗРАБОТЧИК (ИСПРАВЛЕНО)
+# ВХОДЫ: АДМИНИСТРАТОР И РАЗРАБОТЧИК (ИСПРАВЛЕНО: БЕЗ ШАБЛОНОВ ДЛЯ GET)
 # ---------------------------------------------------------------------------
 @app.get("/help", response_class=HTMLResponse)
 def help_page(request: Request):
@@ -641,48 +641,66 @@ def help_page(request: Request):
 
 @app.get("/login", response_class=HTMLResponse)
 def admin_login_form(request: Request):
-    """Показывает форму входа. Если уже залогинен — редирект в панель."""
+    """
+    Возвращает HTML напрямую, чтобы избежать ошибок TemplateNotFound.
+    """
     try:
         if is_admin(request):
             return RedirectResponse(url="/admin", status_code=303)
-        
-        template_name = "login.html"
-        if not os.path.exists(BASE_DIR / "templates" / template_name):
-             return HTMLResponse(content="<h1>Ошибка: шаблон login.html не найден</h1>", status_code=500)
-
-        return templates.TemplateResponse(template_name, {"request": request, "error": None})
-    except Exception as e:
-        log_error("login_get", str(e))
-        return HTMLResponse(content=f"<h1>Ошибка загрузки формы входа</h1><p>{e}</p>", status_code=500)
+    except Exception:
+        pass
+    
+    html_content = """
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Вход администратора</title>
+    <style>
+        body { font-family: sans-serif; background: #1a1a1a; color: #fff; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .card { background: #2d2d2d; padding: 40px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 300px; text-align: center; }
+        h1 { font-size: 20px; margin-bottom: 20px; color: #c8a24a; }
+        input { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #444; background: #111; color: #fff; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #c8a24a; color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #e0b960; }
+        a { color: #6fa0c8; text-decoration: none; font-size: 12px; display: block; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>ПАТРУЛЬ · ВХОД</h1>
+        <form action="/login" method="POST">
+            <input type="password" name="password" placeholder="Пароль администратора" required autofocus>
+            <button type="submit">ВОЙТИ</button>
+        </form>
+        <a href="/">Страница патруля</a>
+        <a href="/dev/login">Вход разработчика</a>
+    </div>
+</body>
+</html>
+    """
+    return HTMLResponse(content=html_content)
 
 @app.post("/login")
 def admin_login(request: Request, password: str = Form(...)):
-    """Обрабатывает отправку формы входа."""
     ip = get_client_ip(request)
     
     if rate_limited(ip):
-        return templates.TemplateResponse(
-            "login.html", 
-            {"request": request, "error": "Слишком много неудачных попыток. Подождите 10 минут."}, 
-            status_code=429
-        )
+        return HTMLResponse(content="<h1 style='color:red;text-align:center;margin-top:50px;'>Слишком много попыток. Подождите 10 минут.</h1>", status_code=429)
     
     current_admin_pass = get_admin_password()
     current_dev_pass = get_dev_password()
     
+    role = None
     if password == current_admin_pass:
         role = "admin"
     elif password == current_dev_pass:
         role = "dev"
-    else:
+    
+    if not role:
         register_fail(ip)
         log_action(request, "вход в админку: отказ", f"IP {ip}")
-        error_msg = "Неверный пароль."
-        return templates.TemplateResponse(
-            "login.html", 
-            {"request": request, "error": error_msg}, 
-            status_code=400
-        )
+        return HTMLResponse(content="<h1 style='color:red;text-align:center;margin-top:50px;'>Неверный пароль.</h1><a href='/login' style='display:block;text-align:center;color:white;'>Назад</a>", status_code=400)
     
     clear_fails(ip)
     log_action(request, "успешный вход", f"роль {role}, IP {ip}")
