@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Все заявки поддержки — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+{% include "sidebar.html" %}
+<div class="container">
+    <div class="page-header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+            <div class="page-title"><span class="status-dot"></span><span>Все заявки поддержки</span></div>
+        </div>
+        <div class="nav-links">
+            <span class="badge badge-gray">Видно только разработчику</span>
+        </div>
+    </div>
+
+    <div class="table-card">
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Дата</th>
+                        <th>Автор</th>
+                        <th>Тема</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for tk in tickets %}
+                    <tr>
+                        <td><strong>{{ tk.id }}</strong></td>
+                        <td class="mono">{{ tk.created_at[:16] }}</td>
+                        <td>
+                            {{ tk.reporter_role }}<br>
+                            <small style="color: var(--muted);">{{ tk.reporter_contact or '—' }}</small>
+                        </td>
+                        <td>
+                            <div style="font-weight: 700;">{{ tk.subject }}</div>
+                            <details style="margin-top: 4px;">
+                                <summary style="cursor: pointer; color: var(--accent2); font-size: 12px;">Читать полностью</summary>
+                                <p style="white-space: pre-wrap; margin-top: 8px; font-size: 13px; line-height: 1.6;">{{ tk.description }}</p>
+                                {% if tk.screenshot_path %}
+                                <img src="{{ tk.screenshot_path }}" alt="Скриншот" style="max-width: 100%; border: 1px solid var(--line); border-radius: 4px; margin-top: 8px;">
+                                {% endif %}
+                            </details>
+                        </td>
+                        <td>
+                            {% if tk.status == 'open' %}<span class="badge badge-red">Открыт</span>
+                            {% elif tk.status == 'in_progress' %}<span class="badge badge-orange">В работе</span>
+                            {% elif tk.status == 'resolved' %}<span class="badge badge-green">Решён</span>
+                            {% else %}<span class="badge badge-gray">Закрыт</span>{% endif %}
+                            {% if tk.resolution_note %}
+                            <br><small style="color: var(--muted); margin-top: 4px; display: block;">{{ tk.resolution_note[:50] }}...</small>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <form action="/dev/tickets/update/{{ tk.id }}" method="POST" style="display:flex;flex-direction:column;gap:6px;">
+                                <select name="status" class="form-select" style="padding:4px 8px;font-size:11px;width:auto;">
+                                    <option value="open" {% if tk.status=='open'%}selected{%endif%}>Открыт</option>
+                                    <option value="in_progress" {% if tk.status=='in_progress'%}selected{%endif%}>В работе</option>
+                                    <option value="resolved" {% if tk.status=='resolved'%}selected{%endif%}>Решён</option>
+                                    <option value="closed" {% if tk.status=='closed'%}selected{%endif%}>Закрыт</option>
+                                </select>
+                                <input type="text" name="note" placeholder="Комментарий..." class="form-input" style="padding:4px 8px;font-size:11px;">
+                                <button type="submit" class="btn btn-sm btn-primary">Сохранить</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">∅</div>
+                                <div class="empty-state-text">Заявок пока нет</div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>const t={{ request.query_params.get('toast')|tojson }};if(t)showToast(t);</script>
+</body>
+</html>
