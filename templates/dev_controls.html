@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Режимы и флаги — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Режимы и флаги</span></div>
+            </div>
+            <div class="nav-links">
+                {% if maintenance %}<span class="badge badge-red">Техработы: включены</span>{% else %}<span class="badge badge-green">Техработы: выключены</span>{% endif %}
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+            <h3 style="margin-bottom: 12px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Режим технических работ</h3>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">
+                При включении все пользователи видят заглушку «Ведутся технические работы», кроме разработчика.
+                Служебный контур /dev и статика продолжают работать.
+            </p>
+            <form action="/dev/controls/maintenance" method="POST" onsubmit="return confirm('Изменить режим технических работ?');">
+                <input type="hidden" name="state" value="{% if maintenance %}off{% else %}on{% endif %}">
+                <button type="submit" class="btn {% if maintenance %}btn-success{% else %}btn-danger{% endif %}">
+                    {% if maintenance %}Выключить режим техработ{% else %}Включить режим техработ{% endif %}
+                </button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h3 style="margin-bottom: 12px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Флаги функций</h3>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">
+                Отключение флага скрывает возможность без правки кода. Данные и остальные функции не затрагиваются.
+            </p>
+            <form action="/dev/controls/flags" method="POST">
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px;">
+                    <label style="display: flex; gap: 10px; align-items: center; font-size: 14px; cursor: pointer;">
+                        <input type="checkbox" name="offline_queue" value="on" {% if flags.offline_queue %}checked{% endif %} style="width: 18px; height: 18px;">
+                        Офлайн-очередь у патрульных (записи без сети)
+                    </label>
+                    <label style="display: flex; gap: 10px; align-items: center; font-size: 14px; cursor: pointer;">
+                        <input type="checkbox" name="live_check" value="on" {% if flags.live_check %}checked{% endif %} style="width: 18px; height: 18px;">
+                        Живая проверка студента и мини-досье в форме фиксации
+                    </label>
+                    <label style="display: flex; gap: 10px; align-items: center; font-size: 14px; cursor: pointer;">
+                        <input type="checkbox" name="dup_control" value="on" {% if flags.dup_control %}checked{% endif %} style="width: 18px; height: 18px;">
+                        Защита от дублей при сохранении записи
+                    </label>
+                    <label style="display: flex; gap: 10px; align-items: center; font-size: 14px; cursor: pointer;">
+                        <input type="checkbox" name="hq_refresh" value="on" {% if flags.hq_refresh %}checked{% endif %} style="width: 18px; height: 18px;">
+                        Автообновление экрана «Штаб» каждые 20 секунд
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-primary">Сохранить флаги</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const toastMsg = {{ request.query_params.get('toast') | tojson }};
+        if (toastMsg) { showToast(toastMsg); }
+    </script>
+</body>
+</html>
