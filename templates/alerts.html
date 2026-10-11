@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тревожные студенты — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Тревожные студенты</span></div>
+            </div>
+            <div class="nav-links">
+                <span class="badge badge-gray">Последняя рассылка: {{ last_send }}</span>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px; padding: 18px 22px;">
+            <h3 style="margin-bottom: 12px; letter-spacing: 0.14em; text-transform: uppercase; font-size: 14px;">Почтовая рассылка сводки</h3>
+            <p style="color: var(--muted); font-size: 13px; margin-bottom: 12px;">
+                {% if smtp_host %}SMTP настроен: {{ smtp_host }}. Сводка уходит автоматически ежедневно в 08:00, если список адресов не пуст.{% else %}SMTP не настроен: переменные SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS не заданы на хостинге. Рассылка недоступна, страница работает как список тревожных.{% endif %}
+            </p>
+            <form action="/admin/alerts/emails" method="POST" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <input class="form-input" type="text" name="emails" value="{{ emails }}" placeholder="email1@college.ru, email2@college.ru" style="flex: 1; min-width: 260px;">
+                <button type="submit" class="btn btn-primary">Сохранить адреса</button>
+            </form>
+        </div>
+
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-title">Требуют внимания · {{ alerts|length }}</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Студент</th>
+                            <th>Группы</th>
+                            <th>За 7 дней</th>
+                            <th>Типы нарушений</th>
+                            <th>Причина тревоги</th>
+                            <th>Последнее</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for a in alerts %}
+                        <tr>
+                            <td><strong>{{ a.name }}</strong> <span class="badge badge-darkred">тревога</span></td>
+                            <td class="mono">{{ a.groups }}</td>
+                            <td><span class="badge badge-red">{{ a.count }}</span></td>
+                            <td>{{ a.types }}</td>
+                            <td style="color: var(--muted);">{{ a.reasons }}</td>
+                            <td class="mono">{{ a.last[:10] }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6">
+                                <div class="empty-state">
+                                    <div class="empty-state-icon">∅</div>
+                                    <div class="empty-state-text">Тревожных студентов за последние 7 дней не выявлено</div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const toastMsg = {{ request.query_params.get('toast') | tojson }};
+        if (toastMsg) { showToast(toastMsg); }
+    </script>
+</body>
+</html>
