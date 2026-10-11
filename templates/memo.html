@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Докладная записка — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="page-header no-print">
+            <div class="page-title"><span>Докладная записка</span></div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="window.print()">Печать</button>
+                <a class="btn btn-secondary" href="/admin/report">← К отчёту</a>
+            </div>
+        </div>
+
+        <div class="card report-sheet" style="line-height: 1.9; font-size: 14px;">
+            <div style="text-align: right; line-height: 1.8; margin-bottom: 30px;">
+                Директору {{ org }}<br>
+                ____________________________<br><br>
+                от руководителя патрульной службы<br>
+                ____________________________
+            </div>
+
+            <h2 style="text-align: center; letter-spacing: 0.18em; text-transform: uppercase; font-size: 16px;">
+                Докладная записка № ______
+            </h2>
+            <p style="text-align: center; margin-bottom: 24px;">{{ generated }} г.</p>
+
+            <p style="text-align: center; font-weight: 700; margin-bottom: 20px;">
+                О нарушениях дисциплины студентами<br>
+                за период с {{ period_start }} по {{ period_end }}{% if dept_name %} ({{ dept_name }}){% endif %}
+            </p>
+
+            <p>
+                Докладываю, что за указанный период патрульной службой колледжа зафиксировано
+                <strong>{{ total }}</strong> нарушений дисциплины и правил внутреннего распорядка.
+            </p>
+
+            <p>
+                По типам нарушений:
+                {% for t, c in by_type %}{{ t | lower }} — {{ c }}{% if not loop.last %}; {% else %}.{% endif %}{% endfor %}
+                {% if not by_type %}нарушений не зафиксировано.{% endif %}
+            </p>
+
+            {% if top_students %}
+            <p>
+                Наибольшее количество нарушений допущено следующими студентами:
+                {% for name, c in top_students %}{{ name }} ({{ c }}){% if not loop.last %}, {% else %}.{% endif %}{% endfor %}
+            </p>
+            {% endif %}
+
+            <p>
+                Прошу рассмотреть указанные факты на совещании, организовать профилактические беседы
+                со студентами и их законными представителями и взять перечисленные группы на контроль.
+                Подробный перечень нарушений прилагается в отчёте патрульной службы за тот же период.
+            </p>
+
+            <div class="report-signatures" style="margin-top: 48px;">
+                <span>Руководитель патрульной службы: ____________________</span>
+                <span>Дата: ____________________</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
