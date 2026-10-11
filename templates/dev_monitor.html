@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Монитор запросов — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Монитор запросов</span></div>
+            </div>
+            <div class="nav-links">
+                <span class="badge badge-gray">Хранятся последние 500 запросов</span>
+            </div>
+        </div>
+
+        <div class="table-card" style="margin-bottom: 20px;">
+            <div class="table-header">
+                <div class="table-title">Нагрузка маршрутов за 24 часа</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Маршрут</th>
+                            <th>Обращений</th>
+                            <th>Среднее время, мс</th>
+                            <th>Максимум, мс</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in routes %}
+                        <tr>
+                            <td class="mono">{{ r.path }}</td>
+                            <td><span class="badge badge-blue">{{ r.hits }}</span></td>
+                            <td class="mono">{{ r.avg_ms|round|int }}</td>
+                            <td class="mono">{{ r.max_ms }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" style="padding: 20px; text-align: center; color: var(--muted);">За сутки обращений не зафиксировано</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-title">Последние запросы</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Время</th>
+                            <th>IP</th>
+                            <th>Метод</th>
+                            <th>Путь</th>
+                            <th>Код</th>
+                            <th>мс</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in recent %}
+                        <tr>
+                            <td class="mono">{{ r.ts }}</td>
+                            <td class="mono">{{ r.ip }}</td>
+                            <td>{{ r.method }}</td>
+                            <td class="mono">{{ r.path }}</td>
+                            <td>
+                                {% if r.status >= 500 %}<span class="badge badge-red">{{ r.status }}</span>
+                                {% elif r.status >= 400 %}<span class="badge badge-orange">{{ r.status }}</span>
+                                {% elif r.status >= 300 %}<span class="badge badge-blue">{{ r.status }}</span>
+                                {% else %}<span class="badge badge-green">{{ r.status }}</span>{% endif %}
+                            </td>
+                            <td class="mono">{{ r.ms }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" style="padding: 20px; text-align: center; color: var(--muted);">Запросов пока нет</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
