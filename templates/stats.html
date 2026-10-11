@@ -11,6 +11,8 @@
         .heat-wrap { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 14px); gap: 3px; overflow-x: auto; padding-bottom: 6px; }
         .heat-cell { width: 14px; height: 14px; border-radius: 2px; background: var(--panel2); }
         .heat-legend { display: flex; gap: 4px; align-items: center; justify-content: flex-end; font-size: 10px; color: var(--muted); margin-top: 8px; letter-spacing: 0.1em; text-transform: uppercase; }
+        .cmp-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+        .cmp-table td { padding: 5px 4px; border-bottom: 1px solid var(--line); }
     </style>
 </head>
 <body>
@@ -57,6 +59,55 @@
                 <div class="stat-icon">// 05</div>
                 <div class="stat-number">{{ month_count }}</div>
                 <div class="stat-label">За 30 дней</div>
+            </div>
+        </div>
+
+        <div class="charts-grid" style="margin-bottom: 20px;">
+            <div class="chart-card">
+                <div class="chart-title">Динамика: сегодня к вчера</div>
+                <p style="font-size: 14px; line-height: 1.9;">
+                    Сегодня: <strong class="mono">{{ today_count }}</strong> · Вчера: <strong class="mono">{{ yesterday_count }}</strong><br>
+                    {% set d = today_count - yesterday_count %}
+                    {% if d > 0 %}<span class="badge badge-red">↑ +{{ d }}</span>
+                    {% elif d < 0 %}<span class="badge badge-green">↓ {{ d }}</span>
+                    {% else %}<span class="badge badge-gray">= 0</span>{% endif %}
+                </p>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">Месяцы: {{ cur_month_label }} к {{ prev_month_label }}</div>
+                <p style="font-size: 14px; line-height: 1.9;">
+                    Текущий: <strong class="mono">{{ cur_month_count }}</strong> · Прошлый: <strong class="mono">{{ prev_month_count }}</strong><br>
+                    {% if prev_month_count > 0 %}
+                        {% set mp = ((cur_month_count - prev_month_count) / prev_month_count * 100)|round %}
+                        {% if mp > 0 %}<span class="badge badge-red">↑ +{{ mp }}%</span>
+                        {% elif mp < 0 %}<span class="badge badge-green">↓ {{ mp }}%</span>
+                        {% else %}<span class="badge badge-gray">= 0%</span>{% endif %}
+                    {% else %}<span class="badge badge-gray">нет данных за прошлый месяц</span>{% endif %}
+                </p>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">Типы: эта неделя к прошлой</div>
+                {% if type_compare %}
+                <table class="cmp-table">
+                    <tbody>
+                        {% for t, cur, prev in type_compare %}
+                        <tr>
+                            <td>{{ t }}</td>
+                            <td class="mono" style="text-align: right;">{{ cur }}</td>
+                            <td class="mono" style="text-align: right; color: var(--muted);">{{ prev }}</td>
+                            <td style="text-align: right;">
+                                {% set dd = cur - prev %}
+                                {% if dd > 0 %}<span class="badge badge-red">+{{ dd }}</span>
+                                {% elif dd < 0 %}<span class="badge badge-green">{{ dd }}</span>
+                                {% else %}<span class="badge badge-gray">0</span>{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color: var(--muted); font-size: 13px;">Нет данных за обе недели.</p>
+                {% endif %}
             </div>
         </div>
 
