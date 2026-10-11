@@ -48,27 +48,4 @@
         </div>
 
         {% if is_dev(request) %}
-        <div class="sidebar-group {% if request.url.path.startswith('/dev') or request.url.path in ['/admin/trash', '/admin/audit'] %}open{% endif %}">
-            <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Служба <span class="arrow">▼</span></button>
-            <div class="sidebar-sub">
-                <a href="/dev/system" class="sidebar-sublink {% if request.url.path == '/dev/system' %}active{% endif %}">Система</a>
-                <a href="/dev/errors" class="sidebar-sublink {% if request.url.path == '/dev/errors' %}active{% endif %}">Журнал ошибок</a>
-                <a href="/dev/tools" class="sidebar-sublink {% if request.url.path == '/dev/tools' %}active{% endif %}">Резерв и сессии</a>
-                <a href="/admin/trash" class="sidebar-sublink {% if request.url.path == '/admin/trash' %}active{% endif %}">Корзина</a>
-                <a href="/admin/audit" class="sidebar-sublink {% if request.url.path == '/admin/audit' %}active{% endif %}">Журнал операций</a>
-                <a href="/dev/monitor" class="sidebar-sublink {% if request.url.path == '/dev/monitor' %}active{% endif %}">Монитор запросов</a>
-                <a href="/dev/selftest" class="sidebar-sublink {% if request.url.path == '/dev/selftest' %}active{% endif %}">Самотест</a>
-                <a href="/dev/controls" class="sidebar-sublink {% if request.url.path == '/dev/controls' %}active{% endif %}">Режимы и флаги</a>
-            </div>
-        </div>
-        {% endif %}
-    </nav>
-
-    <div class="sidebar-footer">
-        <div class="sidebar-link" style="cursor: default; color: var(--muted); font-size: 11px; letter-spacing: 0.16em;">
-            {% if is_dev(request) %}РОЛЬ: РАЗРАБОТЧИК{% else %}РОЛЬ: АДМИНИСТРАТОР{% endif %}
-        </div>
-        <button class="sidebar-link" onclick="toggleTheme()"><span class="theme-icon">РЕЖИМ: НОЧЬ</span></button>
-        <a href="/admin/logout" class="sidebar-link danger">Выход</a>
-    </div>
-</aside>
+        <div class="sidebar-group {% if request.url.p 
