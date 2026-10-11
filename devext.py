@@ -9,6 +9,7 @@ import os
 import smtplib
 import threading
 import time
+import traceback
 from collections import Counter
 from datetime import datetime, timedelta
 from email.message import EmailMessage
@@ -36,6 +37,14 @@ p { color: #8593a2; line-height: 1.7; font-size: 14px; }
 <p>Система патрульной службы временно недоступна: ведутся плановые работы.</p>
 <p>Данные в безопасности. Попробуйте позже или обратитесь к разработчику системы.</p>
 </div></body></html>"""
+
+def _error_page(where: str) -> HTMLResponse:
+    tb = traceback.format_exc()
+    M.log_error(where, tb)
+    return HTMLResponse(
+        content=f"<html><body style='background:#0a0e13;color:#d8dee6;font-family:monospace;padding:30px;'><h2>Сбой на странице: {where}</h2><pre style='white-space:pre-wrap;color:#d05353;'>{tb}</pre></body></html>",
+        status_code=500,
+    )
 
 # ---------------------------------------------------------------------------
 # Промежуточные слои
@@ -84,68 +93,77 @@ def dev_health(request: Request):
 def dev_monitor(request: Request):
     if not M.is_dev(request):
         return RedirectResponse(url="/dev/login", status_code=303)
-    conn = M.get_db_connection()
-    conn.execute("DELETE FROM access_log WHERE id NOT IN (SELECT id FROM access_log ORDER BY id DESC LIMIT 500)")
-    conn.commit()
-    recent = conn.execute("SELECT * FROM access_log ORDER BY id DESC LIMIT 100").fetchall()
-    cutoff = (datetime.now() - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
-    routes = conn.execute(
-        "SELECT path, COUNT(*) AS hits, AVG(ms) AS avg_ms, MAX(ms) AS max_ms FROM access_log WHERE ts >= ? GROUP BY path ORDER BY hits DESC LIMIT 30",
-        (cutoff,),
-    ).fetchall()
-    conn.close()
-    return _TPL.TemplateResponse(
-        "dev_monitor.html",
-        {"request": request, "recent": recent, "routes": routes},
-    )
+    try:
+        conn = M.get_db_connection()
+        conn.execute("DELETE FROM access_log WHERE id <= (SELECT MAX(id) - 500 FROM access_log)")
+        conn.commit()
+        recent = conn.execute("SELECT * FROM access_log ORDER BY id DESC LIMIT 100").fetchall()
+        cutoff = (datetime.now() - timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+        routes = conn.execute(
+            "SELECT path, COUNT(*) AS hits, AVG(ms) AS avg_ms, MAX(ms) AS max_ms FROM access_log WHERE ts >= ? GROUP BY path ORDER BY hits DESC LIMIT 30",
+            (cutoff,),
+        ).fetchall()
+        conn.close()
+        return _TPL.TemplateResponse(
+            "dev_monitor.html",
+            {"request": request, "recent": recent, "routes": routes},
+        )
+    except Exception:
+        return _error_page("dev_monitor")
 
 def dev_selftest(request: Request):
     if not M.is_dev(request):
         return RedirectResponse(url="/dev/login", status_code=303)
-    checks = []
-
-    def add(name, ok, comment=""):
-        checks.append({"name": name, "ok": bool(ok), "comment": comment})
-
-    add("Файл базы существует", os.path.exists(M.DB_PATH), str(M.DB_PATH))
-    add("Каталог базы доступен для записи", os.access(M.DB_DIR, os.W_OK), str(M.DB_DIR))
     try:
-        conn = M.get_db_connection()
-        tables = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
-        conn.close()
-        required = ["violations", "patrol_members", "duty_schedule", "shifts", "meta", "error_log", "audit_log", "access_log"]
-        missing = [t for t in required if t not in tables]
-        add("Все обязательные таблицы на месте", not missing, ", ".join(missing) if missing else f"{len(required)} таблиц")
-    except Exception as e:
-        add("Все обязательные таблицы на месте", False, repr(e))
-    try:
-        M.get_meta("session_salt")
-        add("Таблица meta читается", True)
-    except Exception as e:
-        add("Таблица meta читается", False, repr(e))
-    add("Файл стилей на месте", os.path.exists(M.BASE_DIR / "static" / "styles.css"))
-    tpl_dir = M.BASE_DIR / "templates"
-    missing_tpl = [f for f in ["admin.html", "patrol.html", "login.html", "sidebar.html"] if not (tpl_dir / f).exists()]
-    add("Ключевые шаблоны на месте", not missing_tpl, ", ".join(missing_tpl) if missing_tpl else "")
-    add("SMTP для рассылки настроен", bool(os.environ.get("SMTP_HOST")), os.environ.get("SMTP_HOST") or "переменная SMTP_HOST не задана")
-    add("Токен бота MAX задан", bool(os.environ.get("MAX_BOT_TOKEN")), "" if os.environ.get("MAX_BOT_TOKEN") else "бот не запущен")
-    add("Пароль разработчика изменён", M.get_dev_password() != "developer", "" if M.get_dev_password() != "developer" else "стоит пароль по умолчанию")
-    return _TPL.TemplateResponse(
-        "dev_selftest.html",
-        {"request": request, "checks": checks, "version": M.APP_VERSION},
-    )
+        checks = []
+
+        def add(name, ok, comment=""):
+            checks.append({"name": name, "ok": bool(ok), "comment": comment})
+
+        add("Файл базы существует", os.path.exists(M.DB_PATH), str(M.DB_PATH))
+        add("Каталог базы доступен для записи", os.access(M.DB_DIR, os.W_OK), str(M.DB_DIR))
+        try:
+            conn = M.get_db_connection()
+            tables = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+            conn.close()
+            required = ["violations", "patrol_members", "duty_schedule", "shifts", "meta", "error_log", "audit_log", "access_log"]
+            missing = [t for t in required if t not in tables]
+            add("Все обязательные таблицы на месте", not missing, ", ".join(missing) if missing else f"{len(required)} таблиц")
+        except Exception as e:
+            add("Все обязательные таблицы на месте", False, repr(e))
+        try:
+            M.get_meta("session_salt")
+            add("Таблица meta читается", True)
+        except Exception as e:
+            add("Таблица meta читается", False, repr(e))
+        add("Файл стилей на месте", os.path.exists(M.BASE_DIR / "static" / "styles.css"))
+        tpl_dir = M.BASE_DIR / "templates"
+        missing_tpl = [f for f in ["admin.html", "patrol.html", "login.html", "sidebar.html", "dev_monitor.html", "dev_selftest.html", "dev_controls.html", "alerts.html", "memo.html"] if not (tpl_dir / f).exists()]
+        add("Все шаблоны на месте", not missing_tpl, ", ".join(missing_tpl) if missing_tpl else "")
+        add("SMTP для рассылки настроен", bool(os.environ.get("SMTP_HOST")), os.environ.get("SMTP_HOST") or "переменная SMTP_HOST не задана")
+        add("Токен бота MAX задан", bool(os.environ.get("MAX_BOT_TOKEN")), "" if os.environ.get("MAX_BOT_TOKEN") else "бот не запущен")
+        add("Пароль разработчика изменён", M.get_dev_password() != "developer", "" if M.get_dev_password() != "developer" else "стоит пароль по умолчанию")
+        return _TPL.TemplateResponse(
+            "dev_selftest.html",
+            {"request": request, "checks": checks, "version": M.APP_VERSION},
+        )
+    except Exception:
+        return _error_page("dev_selftest")
 
 def dev_controls(request: Request):
     if not M.is_dev(request):
         return RedirectResponse(url="/dev/login", status_code=303)
-    return _TPL.TemplateResponse(
-        "dev_controls.html",
-        {
-            "request": request,
-            "maintenance": M.get_meta("maintenance", "0") == "1",
-            "flags": M.get_flags(),
-        },
-    )
+    try:
+        return _TPL.TemplateResponse(
+            "dev_controls.html",
+            {
+                "request": request,
+                "maintenance": M.get_meta("maintenance", "0") == "1",
+                "flags": M.get_flags(),
+            },
+        )
+    except Exception:
+        return _error_page("dev_controls")
 
 def dev_controls_maintenance(request: Request, state: str = Form(...)):
     if not M.is_dev(request):
@@ -220,16 +238,19 @@ def alerts_text() -> str:
 def admin_alerts(request: Request):
     if not M.is_admin(request):
         return RedirectResponse(url="/login", status_code=303)
-    return _TPL.TemplateResponse(
-        "alerts.html",
-        {
-            "request": request,
-            "alerts": compute_alerts(),
-            "emails": M.get_meta("alert_emails", ""),
-            "smtp_host": os.environ.get("SMTP_HOST", ""),
-            "last_send": M.get_meta("last_alert_send", "") or "никогда",
-        },
-    )
+    try:
+        return _TPL.TemplateResponse(
+            "alerts.html",
+            {
+                "request": request,
+                "alerts": compute_alerts(),
+                "emails": M.get_meta("alert_emails", ""),
+                "smtp_host": os.environ.get("SMTP_HOST", ""),
+                "last_send": M.get_meta("last_alert_send", "") or "никогда",
+            },
+        )
+    except Exception:
+        return _error_page("admin_alerts")
 
 async def admin_alerts_emails(request: Request):
     if not M.is_admin(request):
@@ -248,38 +269,39 @@ def admin_memo(
 ):
     if not M.is_admin(request):
         return RedirectResponse(url="/login", status_code=303)
-    now = datetime.now()
-    if not date_from:
-        date_from = (now - timedelta(days=7)).strftime("%Y-%m-%d")
-    if not date_to:
-        date_to = now.strftime("%Y-%m-%d")
-    departments = M.get_departments()
-    query = "SELECT * FROM violations WHERE deleted_at IS NULL AND created_at >= ? AND created_at <= ?"
-    params = [date_from + " 00:00:00", date_to + " 23:59:59"]
-    if department:
-        query += " AND student_group LIKE ?"
-        params.append(f"{department}%")
-    query += " ORDER BY created_at DESC"
-    conn = M.get_db_connection()
-    rows = conn.execute(query, params).fetchall()
-    conn.close()
-    by_type = Counter(r["violation_type"] for r in rows)
-    by_student = Counter(r["student_name"] for r in rows)
-    org = M.get_meta("org_name", "") or "Учебное заведение"
-    return _TPL.TemplateResponse(
-        "memo.html",
-        {
-            "request": request,
-            "org": org,
-            "period_start": date_from,
-            "period_end": date_to,
-            "generated": now.strftime("%d.%m.%Y"),
-            "total": len(rows),
-            "by_type": by_type.most_common(),
-            "top_students": by_student.most_common(5),
-            "dept_name": departments.get(department or "", ""),
-        },
-    )
+    try:
+        now = datetime.now()
+        if not date_from:
+            date_from = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+        if not date_to:
+            date_to = now.strftime("%Y-%m-%d")
+        departments = M.get_departments()
+        query = "SELECT * FROM violations WHERE deleted_at IS NULL AND created_at >= ? AND created_at <= ?"
+        params = [date_from + " 00:00:00", date_to + " 23:59:59"]
+        if department:
+            query += " AND student_group LIKE ?"
+            params.append(f"{department}%")
+        query += " ORDER BY created_at DESC"
+        conn = M.get_db_connection()
+        rows = conn.execute(query, params).fetchall()
+        conn.close()
+        by_type = Counter(r["violation_type"] for r in rows)
+        by_student = Counter(r["student_name"] for r in rows)
+        return _TPL.TemplateResponse(
+            "memo.html",
+            {
+                "request": request,
+                "period_start": date_from,
+                "period_end": date_to,
+                "generated": now.strftime("%d.%m.%Y"),
+                "total": len(rows),
+                "by_type": by_type.most_common(),
+                "top_students": by_student.most_common(5),
+                "dept_name": departments.get(department or "", ""),
+            },
+        )
+    except Exception:
+        return _error_page("admin_memo")
 
 # ---------------------------------------------------------------------------
 # Почтовая рассылка тревожной сводки (если настроен SMTP)
