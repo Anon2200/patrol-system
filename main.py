@@ -29,7 +29,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_DIR = Path(os.environ.get("DB_DIR", str(BASE_DIR)))
 DB_PATH = DB_DIR / "patrol.db"
 
-APP_VERSION = "5.0 (тревожные, докладная, динамика, служебные инструменты)"
+APP_VERSION = "5.1 (система обращений только для разработчика)"
 START_TIME = datetime.now()
 
 SECRET_KEY = os.environ.get("SECRET_KEY", "zameni-menya-na-sluchaynuyu-stroku")
@@ -65,9 +65,11 @@ DEFAULT_PATROL_NAMES = [
     "Соболев",
     "Сахно",
     "Сорокин",
+    "Барболина",
     "Зиновьева",
     "Метлёнкина",
     "Павловская",
+    "Григорьева",
 ]
 
 VIOLATION_TYPES = [
@@ -106,6 +108,10 @@ SORTABLE_COLUMNS = ["id", "created_at", "patrol_name", "student_name", "student_
 app = FastAPI(title="Патрульная служба колледжа")
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+UPLOADS_DIR = BASE_DIR / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 # ---------------------------------------------------------------------------
 # Защитные заголовки и запрет кеша статики
@@ -217,6 +223,22 @@ def init_db() -> None:
             path TEXT,
             status INTEGER,
             ms INTEGER
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS support_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            reporter_role TEXT NOT NULL,
+            reporter_contact TEXT,
+            subject TEXT NOT NULL,
+            description TEXT NOT NULL,
+            screenshot_path TEXT,
+            status TEXT DEFAULT 'open',
+            resolution_note TEXT,
+            updated_at TEXT
         )
         """
     )
@@ -969,6 +991,7 @@ def dev_system(request: Request):
         "error_log": conn.execute("SELECT COUNT(*) FROM error_log").fetchone()[0],
         "trash": conn.execute("SELECT COUNT(*) FROM violations WHERE deleted_at IS NOT NULL").fetchone()[0],
         "audit": conn.execute("SELECT COUNT(*) FROM audit_log").fetchone()[0],
+        "tickets_open": conn.execute("SELECT COUNT(*) FROM support_tickets WHERE status = 'open'").fetchone()[0],
     }
     conn.close()
 
@@ -1159,6 +1182,147 @@ def admin_audit(request: Request):
         "audit.html",
         {"request": request, "rows": rows},
     )
+
+# ---------------------------------------------------------------------------
+# Система обращений к разработчику (Support Tickets)
+# Доступ: создание — все авторизованные роли; просмотр и обработка — ТОЛЬКО разработчик
+# ---------------------------------------------------------------------------
+@app.get("/support/new", response_class=HTMLResponse)
+def support_new_form(request: Request):
+    role = get_role(request)
+    patrol = get_patrol_name(request)
+    if not role and not patrol:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    contact = ""
+    if patrol:
+        contact = f"patrol:{patrol}"
+    elif role == "admin":
+        contact = "admin"
+    elif role == "dev":
+        contact = "developer"
+        
+    return templates.TemplateResponse(
+        "support_ticket.html",
+        {"request": request, "default_contact": contact},
+    )
+
+@app.post("/support/create")
+async def support_create(
+    request: Request,
+    subject: str = Form(...),
+    description: str = Form(...),
+    contact: str = Form(""),
+    screenshot: UploadFile = File(None),
+):
+    role = get_role(request)
+    patrol = get_patrol_name(request)
+    if not role and not patrol:
+        return RedirectResponse(url="/login", status_code=303)
+
+    reporter_role = "patrol" if patrol else (role or "anon")
+    
+    shot_path = None
+    if screenshot and screenshot.filename:
+        safe_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(4)}.png"
+        dest = UPLOADS_DIR / safe_name
+        content = await screenshot.read()
+        if len(content) > 5 * 1024 * 1024:
+            return toast_redirect("/support/new", "Файл слишком большой (максимум 5 МБ)")
+        with open(dest, "wb") as f:
+            f.write(content)
+        shot_path = f"/uploads/{safe_name}"
+
+    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db_connection()
+    cur = conn.execute(
+        """
+        INSERT INTO support_tickets 
+        (created_at, reporter_role, reporter_contact, subject, description, screenshot_path, status, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'open', ?)
+        """,
+        (created_at, reporter_role, contact.strip(), subject.strip(), description.strip(), shot_path, created_at),
+    )
+    ticket_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+
+    log_action(request, "создан тикет поддержки", f"#{ticket_id}: {subject[:100]}")
+    
+    # Уведомление разработчику через MAX-бота (если запущен)
+    try:
+        import maxbot
+        text_msg = (
+            f"🎫 НОВЫЙ ТИКЕТ #{ticket_id}\n"
+            f"От: {reporter_role} ({contact or 'без контакта'})\n"
+            f"Тема: {subject}\n\n{description[:300]}"
+        )
+        dev_chat_id = maxbot.get_meta("dev_max_chat_id", "")
+        if dev_chat_id:
+            maxbot.send(dev_chat_id, text_msg)
+    except Exception:
+        pass
+
+    redirect_url = "/support/my" if patrol else ("/admin" if role == "admin" else "/dev/tickets")
+    return toast_redirect(redirect_url, f"Заявка отправлена. Номер тикета: #{ticket_id}")
+
+@app.get("/support/my", response_class=HTMLResponse)
+def support_my_list(request: Request):
+    patrol = get_patrol_name(request)
+    role = get_role(request)
+    if not patrol and not role:
+        return RedirectResponse(url="/login", status_code=303)
+    
+    reporter_filter = f"patrol:{patrol}" if patrol else (role or "anon")
+    conn = get_db_connection()
+    tickets = conn.execute(
+        "SELECT * FROM support_tickets WHERE reporter_contact = ? OR reporter_role = ? ORDER BY id DESC LIMIT 20",
+        (reporter_filter, reporter_filter),
+    ).fetchall()
+    conn.close()
+    
+    return templates.TemplateResponse(
+        "support_my.html",
+        {"request": request, "tickets": tickets},
+    )
+
+@app.get("/dev/tickets", response_class=HTMLResponse)
+def dev_tickets_list(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    conn = get_db_connection()
+    tickets = conn.execute("SELECT * FROM support_tickets ORDER BY id DESC LIMIT 100").fetchall()
+    conn.close()
+    return templates.TemplateResponse(
+        "dev_tickets.html",
+        {"request": request, "tickets": tickets},
+    )
+
+@app.post("/dev/tickets/update/{ticket_id}")
+def dev_tickets_update(
+    request: Request,
+    ticket_id: int,
+    status: str = Form(...),
+    note: str = Form(""),
+):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    
+    valid_statuses = ["open", "in_progress", "resolved", "closed"]
+    if status not in valid_statuses:
+        return toast_redirect("/dev/tickets", "Некорректный статус")
+    
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = get_db_connection()
+    conn.execute(
+        "UPDATE support_tickets SET status = ?, resolution_note = ?, updated_at = ? WHERE id = ?",
+        (status, note.strip(), now, ticket_id),
+    )
+    conn.commit()
+    conn.close()
+    
+    log_action(request, "обновлён тикет поддержки", f"#{ticket_id} -> {status}")
+    return toast_redirect("/dev/tickets", f"Статус тикета #{ticket_id} изменён на '{status}'")
 
 # ---------------------------------------------------------------------------
 # Админ-панель
@@ -2148,3 +2312,8 @@ def hq_data(request: Request):
 import devext  # noqa: E402
 
 devext.register(app, templates)
+
+# ---------------------------------------------------------------------------
+# Бот мессенджера MAX (запускается только при заданном MAX_BOT_TOKEN)
+# ---------------------------------------------------------------------------
+import maxbot  # noqa: E402,F401
