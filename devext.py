@@ -46,6 +46,27 @@ def _error_page(where: str) -> HTMLResponse:
         status_code=500,
     )
 
+def ensure_access_log() -> None:
+    try:
+        conn = M.get_db_connection()
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS access_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ts TEXT NOT NULL,
+                ip TEXT,
+                method TEXT,
+                path TEXT,
+                status INTEGER,
+                ms INTEGER
+            )
+            """
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
 # ---------------------------------------------------------------------------
 # Промежуточные слои
 # ---------------------------------------------------------------------------
@@ -94,6 +115,7 @@ def dev_monitor(request: Request):
     if not M.is_dev(request):
         return RedirectResponse(url="/dev/login", status_code=303)
     try:
+        ensure_access_log()
         conn = M.get_db_connection()
         conn.execute("DELETE FROM access_log WHERE id <= (SELECT MAX(id) - 500 FROM access_log)")
         conn.commit()
@@ -351,6 +373,8 @@ def scheduler_loop():
 def register(app, templates):
     global _TPL
     _TPL = templates
+
+    ensure_access_log()
 
     app.middleware("http")(maintenance_mw)
     app.middleware("http")(access_log_mw)
