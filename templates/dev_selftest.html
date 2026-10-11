@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Самотест — Патрульная служба</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js"></script>
+</head>
+<body>
+    {% include "sidebar.html" %}
+    <div class="container">
+        <div class="page-header">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="menu-toggle-inline" onclick="openSidebar()" title="Меню">☰</button>
+                <div class="page-title"><span>Самотест системы</span></div>
+            </div>
+            <div class="nav-links">
+                <span class="badge badge-gray">Версия {{ version }}</span>
+                <span class="badge badge-green">Пройдено: {{ checks|selectattr('ok')|list|length }} из {{ checks|length }}</span>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="table-header">
+                <div class="table-title">Чек-лист здоровья</div>
+            </div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Проверка</th>
+                            <th>Результат</th>
+                            <th>Комментарий</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in checks %}
+                        <tr>
+                            <td>{{ c.name }}</td>
+                            <td>{% if c.ok %}<span class="badge badge-green">норма</span>{% else %}<span class="badge badge-red">внимание</span>{% endif %}</td>
+                            <td style="color: var(--muted);">{{ c.comment or "—" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
