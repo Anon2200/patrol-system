@@ -284,6 +284,11 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception):
     log_error(request.url.path, f"{type(exc).__name__}: {exc}")
+    if os.environ.get("DEBUG_ERRORS") == "1":
+        import traceback
+        from fastapi.responses import PlainTextResponse
+        tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+        return PlainTextResponse("DEBUG " + request.url.path + "\n\n" + tb[-3500:], status_code=500)
     return templates.TemplateResponse(
         "error.html",
         {"request": request, "code": 500, "message": "Внутренняя ошибка сервера. Попробуйте обновить страницу позже."},
@@ -2069,4 +2074,7 @@ def hq_data(request: Request):
 # ---------------------------------------------------------------------------
 # Бот мессенджера MAX (запускается только при заданном MAX_BOT_TOKEN)
 # ---------------------------------------------------------------------------
-import maxbot  # noqa: E402,F401            
+try:
+    import maxbot  # noqa: E402,F401
+except ImportError:
+    pass  # модуля бота нет — сайт работает без него
