@@ -38,20 +38,25 @@
             </div>
         </div>
 
-        <div class="sidebar-group {% if request.url.path in ['/admin/settings', '/admin/quality', '/help'] %}open{% endif %}">
+        <div class="sidebar-group {% if request.url.path in ['/admin/settings', '/admin/quality', '/help', '/support/my', '/support/new'] %}open{% endif %}">
             <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Система <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
                 <a href="/admin/settings" class="sidebar-sublink {% if request.url.path == '/admin/settings' %}active{% endif %}">Настройки</a>
                 <a href="/admin/quality" class="sidebar-sublink {% if request.url.path == '/admin/quality' %}active{% endif %}">Качество данных</a>
                 <a href="/help" class="sidebar-sublink {% if request.url.path == '/help' %}active{% endif %}">Справка</a>
+                <a href="/support/my" class="sidebar-sublink {% if request.url.path in ['/support/my', '/support/new'] %}active{% endif %}">Поддержка</a>
             </div>
         </div>
 
         {% if is_dev(request) %}
-        <div class="sidebar-group {% if request.url.path in ['/dev/system', '/dev/errors', '/dev/tools', '/admin/trash', '/admin/audit'] %}open{% endif %}">
+        <div class="sidebar-group {% if request.url.path in ['/dev/system', '/dev/monitor', '/dev/selftest', '/dev/tickets', '/dev/controls', '/dev/errors', '/dev/tools', '/admin/trash', '/admin/audit'] %}open{% endif %}">
             <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Разработчик <span class="arrow">▼</span></button>
             <div class="sidebar-sub">
                 <a href="/dev/system" class="sidebar-sublink {% if request.url.path == '/dev/system' %}active{% endif %}">Система</a>
+                <a href="/dev/monitor" class="sidebar-sublink {% if request.url.path == '/dev/monitor' %}active{% endif %}">Монитор запросов</a>
+                <a href="/dev/selftest" class="sidebar-sublink {% if request.url.path == '/dev/selftest' %}active{% endif %}">Самотест</a>
+                <a href="/dev/tickets" class="sidebar-sublink {% if request.url.path == '/dev/tickets' %}active{% endif %}">Заявки</a>
+                <a href="/dev/controls" class="sidebar-sublink {% if request.url.path == '/dev/controls' %}active{% endif %}">Управление</a>
                 <a href="/dev/errors" class="sidebar-sublink {% if request.url.path == '/dev/errors' %}active{% endif %}">Журнал ошибок</a>
                 <a href="/dev/tools" class="sidebar-sublink {% if request.url.path == '/dev/tools' %}active{% endif %}">Инструменты и бэкап</a>
                 <a href="/admin/trash" class="sidebar-sublink {% if request.url.path == '/admin/trash' %}active{% endif %}">Корзина</a>
