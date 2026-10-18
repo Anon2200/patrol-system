@@ -1890,8 +1890,12 @@ def stats_page(request: Request):
     departments = get_departments()
     now = datetime.now()
     today_str = now.strftime("%Y-%m-%d")
+    yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
     week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
     month_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    current_month_start = now.replace(day=1)
+    previous_month_end = current_month_start - timedelta(days=1)
+    previous_month_start = previous_month_end.replace(day=1)
     this_monday = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
     last_monday = (now - timedelta(days=now.weekday() + 7)).strftime("%Y-%m-%d")
 
@@ -1911,10 +1915,15 @@ def stats_page(request: Request):
 
     total = len(rows)
     today_count = 0
+    yesterday_count = 0
     week_count = 0
     month_count = 0
+    current_month_count = 0
+    previous_month_count = 0
     this_week_count = 0
     last_week_count = 0
+    current_week_types = Counter()
+    previous_week_types = Counter()
 
     for row in rows:
         day = row["created_at"][:10]
@@ -1922,18 +1931,26 @@ def stats_page(request: Request):
         wd = dt.weekday()
         if day == today_str:
             today_count += 1
+        elif day == yesterday_str:
+            yesterday_count += 1
         if day >= week_ago:
             week_count += 1
         if day >= month_ago:
             month_count += 1
+        if day >= current_month_start.strftime("%Y-%m-%d"):
+            current_month_count += 1
+        elif day >= previous_month_start.strftime("%Y-%m-%d"):
+            previous_month_count += 1
         if day in by_day:
             by_day[day] += 1
         if day in heat:
             heat[day] += 1
         if day >= this_monday:
             this_week_count += 1
+            current_week_types[row["violation_type"]] += 1
         elif day >= last_monday:
             last_week_count += 1
+            previous_week_types[row["violation_type"]] += 1
         by_weekday[wd] += 1
         try:
             by_hour[int(row["created_at"][11:13])] += 1
@@ -1959,6 +1976,13 @@ def stats_page(request: Request):
         week_delta = round((this_week_count - last_week_count) / last_week_count * 100)
     else:
         week_delta = None
+
+    type_compare = [
+        (violation_type, current_week_types[violation_type], previous_week_types[violation_type])
+        for violation_type in sorted(set(current_week_types) | set(previous_week_types))
+    ]
+    cur_month_label = current_month_start.strftime("%m.%Y")
+    prev_month_label = previous_month_start.strftime("%m.%Y")
 
     hours = list(range(7, 21))
     top_groups = by_group.most_common(5)
@@ -2007,6 +2031,12 @@ def stats_page(request: Request):
             "request": request,
             "total": total,
             "today_count": today_count,
+            "yesterday_count": yesterday_count,
+            "cur_month_label": cur_month_label,
+            "prev_month_label": prev_month_label,
+            "cur_month_count": current_month_count,
+            "prev_month_count": previous_month_count,
+            "type_compare": type_compare,
             "week_count": week_count,
             "month_count": month_count,
             "this_week_count": this_week_count,
@@ -2031,7 +2061,13 @@ def stats_page(request: Request):
 def hq_page(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse("hq.html", {"request": request})
+    return templates.TemplateResponse(
+        "hq.html",
+        {
+            "request": request,
+            "flags_json": json.dumps({"hq_refresh": True}),
+        },
+    )
 
 @app.get("/hq/data")
 def hq_data(request: Request):
