@@ -4,13 +4,17 @@ import hmac
 import io
 import json
 import os
+import re
 import secrets
 import shutil
 import sqlite3
+import smtplib
 import tempfile
+import threading
 import time
 import urllib.parse
-from collections import Counter
+from collections import Counter, deque
+from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
@@ -120,6 +124,49 @@ async def no_cache_static(request: Request, call_next):
         response.headers["Cache-Control"] = "no-store, max-age=0"
     return response
 
+# Монитор запросов и режим технических работ
+REQ_LOG: deque = deque(maxlen=5000)
+
+@app.middleware("http")
+async def monitor_and_maintenance(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/static") or path in ("/sw.js", "/manifest.webmanifest", "/hq/data"):
+        return await call_next(request)
+    started = time.time()
+    status = 500
+    try:
+        blocked = False
+        try:
+            if get_meta("maintenance", "0") == "1":
+                blocked = not (is_dev(request) or path.startswith("/dev/login"))
+        except Exception:
+            blocked = False
+        if blocked:
+            response = templates.TemplateResponse(
+                "error.html",
+                {"request": request, "code": 503, "message": "Идут технические работы. Попробуйте зайти чуть позже."},
+                status_code=503,
+            )
+        else:
+            response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        try:
+            REQ_LOG.append(
+                {
+                    "t": started,
+                    "ts": datetime.fromtimestamp(started).strftime("%H:%M:%S"),
+                    "ip": get_client_ip(request),
+                    "method": request.method,
+                    "path": path,
+                    "status": status,
+                    "ms": round((time.time() - started) * 1000),
+                }
+            )
+        except Exception:
+            pass
+
 # ---------------------------------------------------------------------------
 # База данных и миграции
 # ---------------------------------------------------------------------------
@@ -202,6 +249,22 @@ def init_db() -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS support_tickets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT NOT NULL,
+            reporter_role TEXT NOT NULL,
+            reporter_contact TEXT,
+            subject TEXT NOT NULL,
+            description TEXT NOT NULL,
+            screenshot_path TEXT,
+            status TEXT NOT NULL DEFAULT 'open',
+            resolution_note TEXT,
+            updated_at TEXT
+        )
+        """
+    )
     cols = [r["name"] for r in conn.execute("PRAGMA table_info(violations)").fetchall()]
     if "status" not in cols:
         conn.execute("ALTER TABLE violations ADD COLUMN status TEXT DEFAULT 'new'")
@@ -221,6 +284,7 @@ def init_db() -> None:
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+    start_alert_scheduler()
 
 # ---------------------------------------------------------------------------
 # PWA
@@ -553,6 +617,7 @@ def patrol_home(request: Request):
         {
             "request": request,
             "logged_in": True,
+            **patrol_extra(patrol_name),
             "patrol_name": patrol_name,
             "violation_types": get_violation_types(),
             "known_students": sorted(known.keys()),
@@ -683,7 +748,7 @@ def add_violation(
         (student_name_clean, violation_type, today + " 00:00:00"),
     ).fetchone()
 
-    if dup and dup_confirm != "1":
+    if dup and dup_confirm != "1" and get_flags()["dup_control"]:
         known = get_known_students()
         conn.close()
         return templates.TemplateResponse(
@@ -691,6 +756,7 @@ def add_violation(
             {
                 "request": request,
                 "logged_in": True,
+                **patrol_extra(patrol_name),
                 "patrol_name": patrol_name,
                 "violation_types": get_violation_types(),
                 "known_students": sorted(known.keys()),
@@ -1894,6 +1960,18 @@ def stats_page(request: Request):
     month_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
     this_monday = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
     last_monday = (now - timedelta(days=now.weekday() + 7)).strftime("%Y-%m-%d")
+    yesterday_str = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    cur_month_prefix = now.strftime("%Y-%m")
+    prev_month_last = now.replace(day=1) - timedelta(days=1)
+    prev_month_prefix = prev_month_last.strftime("%Y-%m")
+    MONTHS_RU = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"]
+    cur_month_label = f"{MONTHS_RU[now.month - 1]} {now.year}"
+    prev_month_label = f"{MONTHS_RU[prev_month_last.month - 1]} {prev_month_last.year}"
+    yesterday_count = 0
+    cur_month_count = 0
+    prev_month_count = 0
+    this_week_types = Counter()
+    last_week_types = Counter()
 
     days = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(13, -1, -1)]
     heat_days = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(179, -1, -1)]
@@ -1930,10 +2008,18 @@ def stats_page(request: Request):
             by_day[day] += 1
         if day in heat:
             heat[day] += 1
+        if day == yesterday_str:
+            yesterday_count += 1
+        if day.startswith(cur_month_prefix):
+            cur_month_count += 1
+        elif day.startswith(prev_month_prefix):
+            prev_month_count += 1
         if day >= this_monday:
             this_week_count += 1
+            this_week_types[row["violation_type"]] += 1
         elif day >= last_monday:
             last_week_count += 1
+            last_week_types[row["violation_type"]] += 1
         by_weekday[wd] += 1
         try:
             by_hour[int(row["created_at"][11:13])] += 1
@@ -1960,6 +2046,10 @@ def stats_page(request: Request):
     else:
         week_delta = None
 
+    type_compare = sorted(
+        [(t, this_week_types.get(t, 0), last_week_types.get(t, 0)) for t in set(this_week_types) | set(last_week_types)],
+        key=lambda x: (-x[1], -x[2], x[0]),
+    )
     hours = list(range(7, 21))
     top_groups = by_group.most_common(5)
     top_students = []
@@ -2012,6 +2102,12 @@ def stats_page(request: Request):
             "this_week_count": this_week_count,
             "last_week_count": last_week_count,
             "week_delta": week_delta,
+            "yesterday_count": yesterday_count,
+            "cur_month_count": cur_month_count,
+            "prev_month_count": prev_month_count,
+            "cur_month_label": cur_month_label,
+            "prev_month_label": prev_month_label,
+            "type_compare": type_compare,
             "top_patrols": by_patrol.most_common(),
             "top_students": top_students,
             "risk_weekday": ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"][cur_wd],
@@ -2031,7 +2127,7 @@ def stats_page(request: Request):
 def hq_page(request: Request):
     if not is_admin(request):
         return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse("hq.html", {"request": request})
+    return templates.TemplateResponse("hq.html", {"request": request, "flags_json": flags_json()})
 
 @app.get("/hq/data")
 def hq_data(request: Request):
@@ -2071,6 +2167,461 @@ def hq_data(request: Request):
         ),
         media_type="application/json",
     )
+# ---------------------------------------------------------------------------
+# Переключатели функций и режим техработ
+# ---------------------------------------------------------------------------
+FLAG_DEFAULTS = {
+    "offline_queue": True,
+    "live_check": True,
+    "dup_control": True,
+    "hq_refresh": True,
+}
+
+def get_flags() -> dict:
+    flags = {}
+    for key, default in FLAG_DEFAULTS.items():
+        raw = get_meta("flag_" + key, "")
+        flags[key] = default if raw == "" else raw == "1"
+    return flags
+
+def flags_json() -> str:
+    return json.dumps(get_flags())
+
+def patrol_extra(patrol_name: str) -> dict:
+    """Данные «Мои записи за сегодня» и переключатели для страницы патрульного."""
+    today = datetime.now().strftime("%Y-%m-%d")
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT student_name, student_group, violation_type, created_at FROM violations "
+        "WHERE deleted_at IS NULL AND patrol_name = ? AND created_at >= ? ORDER BY created_at DESC",
+        (patrol_name, today + " 00:00:00"),
+    ).fetchall()
+    conn.close()
+    recent = [dict(r) for r in rows[:10]]
+    return {
+        "flags_json": flags_json(),
+        "my_recent": recent,
+        "my_today_count": len(rows),
+        "my_last_time": rows[0]["created_at"][11:16] if rows else "",
+    }
+
+@app.get("/dev/controls", response_class=HTMLResponse)
+def dev_controls(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    return templates.TemplateResponse(
+        "dev_controls.html",
+        {"request": request, "flags": get_flags(), "maintenance": get_meta("maintenance", "0") == "1"},
+    )
+
+@app.post("/dev/controls/flags")
+def dev_controls_flags(
+    request: Request,
+    offline_queue: str = Form(""),
+    live_check: str = Form(""),
+    dup_control: str = Form(""),
+    hq_refresh: str = Form(""),
+):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    values = {
+        "offline_queue": offline_queue,
+        "live_check": live_check,
+        "dup_control": dup_control,
+        "hq_refresh": hq_refresh,
+    }
+    for key, val in values.items():
+        set_meta("flag_" + key, "1" if val == "on" else "0")
+    log_action(request, "изменены переключатели функций", ", ".join(f"{k}={'вкл' if v == 'on' else 'выкл'}" for k, v in values.items()))
+    return toast_redirect("/dev/controls", "Переключатели сохранены")
+
+@app.post("/dev/controls/maintenance")
+def dev_controls_maintenance(request: Request, state: str = Form("off")):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    on = state == "on"
+    set_meta("maintenance", "1" if on else "0")
+    log_action(request, "режим техработ", "включён" if on else "выключен")
+    return toast_redirect("/dev/controls", "Режим техработ включён" if on else "Режим техработ выключен")
+
+# ---------------------------------------------------------------------------
+# Монитор запросов и самотест (разработчик)
+# ---------------------------------------------------------------------------
+@app.get("/dev/monitor", response_class=HTMLResponse)
+def dev_monitor(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    day_ago = time.time() - 86400
+    stats: dict = {}
+    for e in list(REQ_LOG):
+        if e["t"] < day_ago:
+            continue
+        st = stats.setdefault(e["path"], {"hits": 0, "total": 0, "max": 0})
+        st["hits"] += 1
+        st["total"] += e["ms"]
+        st["max"] = max(st["max"], e["ms"])
+    routes = sorted(
+        (
+            {"path": path, "hits": st["hits"], "avg_ms": st["total"] / st["hits"], "max_ms": st["max"]}
+            for path, st in stats.items()
+        ),
+        key=lambda r: (-r["hits"], r["path"]),
+    )[:30]
+    recent = list(REQ_LOG)[-500:][::-1]
+    return templates.TemplateResponse("dev_monitor.html", {"request": request, "routes": routes, "recent": recent})
+
+@app.get("/dev/selftest", response_class=HTMLResponse)
+def dev_selftest(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    checks = []
+
+    def add(name: str, ok: bool, comment: str = "") -> None:
+        checks.append({"name": name, "ok": bool(ok), "comment": comment})
+
+    try:
+        conn = get_db_connection()
+        conn.execute("SELECT 1").fetchone()
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+        need = {"violations", "patrol_members", "duty_schedule", "shifts", "meta", "error_log", "audit_log", "support_tickets"}
+        missing = sorted(need - tables)
+        add("База данных отвечает", True, f"{human_size(DB_PATH.stat().st_size)}" if DB_PATH.exists() else "")
+        add("Все таблицы на месте", not missing, ("нет таблиц: " + ", ".join(missing)) if missing else "")
+        members = conn.execute("SELECT COUNT(*) FROM patrol_members").fetchone()[0]
+        add("Список патрульных не пуст", members > 0, f"записей: {members}")
+        errors24 = conn.execute(
+            "SELECT COUNT(*) FROM error_log WHERE created_at >= ?",
+            ((datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S"),),
+        ).fetchone()[0]
+        add("Ошибок за последние сутки нет", errors24 == 0, f"ошибок: {errors24}" if errors24 else "")
+        conn.close()
+    except Exception as exc:
+        add("База данных отвечает", False, f"{type(exc).__name__}: {exc}")
+
+    try:
+        probe = DB_DIR / ".write_test"
+        probe.write_text("ok")
+        probe.unlink()
+        add("Папка данных доступна для записи", True, str(DB_DIR))
+    except Exception as exc:
+        add("Папка данных доступна для записи", False, str(exc))
+
+    missing_tpl = [
+        name
+        for name in set(re.findall(r'"([a-z_]+\.html)"', Path(__file__).read_text(encoding="utf-8")))
+        if not (BASE_DIR / "templates" / name).exists()
+    ]
+    add("Все шаблоны найдены", not missing_tpl, ", ".join(sorted(missing_tpl)))
+    static_missing = [n for n in ("app.js", "styles.css", "sw.js") if not (BASE_DIR / "static" / n).exists()]
+    add("Файлы оформления найдены", not static_missing, ", ".join(static_missing))
+    add("SECRET_KEY изменён", SECRET_KEY != "zameni-menya-na-sluchaynuyu-stroku", "задан стандартный ключ" if SECRET_KEY == "zameni-menya-na-sluchaynuyu-stroku" else "")
+    add("Пароль администратора изменён", get_admin_password() != "1029384756", "действует стандартный пароль" if get_admin_password() == "1029384756" else "")
+    add("Пароль разработчика изменён", get_dev_password() != "developer", "действует стандартный пароль" if get_dev_password() == "developer" else "")
+    add("ПИН патрульных изменён", get_pin() != "1234", "действует стандартный ПИН" if get_pin() == "1234" else "")
+    add("Режим техработ выключен", get_meta("maintenance", "0") != "1", "сайт закрыт для всех, кроме разработчика" if get_meta("maintenance", "0") == "1" else "")
+    return templates.TemplateResponse("dev_selftest.html", {"request": request, "checks": checks, "version": APP_VERSION})
+
+# ---------------------------------------------------------------------------
+# Заявки в поддержку
+# ---------------------------------------------------------------------------
+SUPPORT_DIR = DB_DIR / "uploads" / "support"
+SUPPORT_ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+SUPPORT_MAX_BYTES = 5 * 1024 * 1024
+
+def reporter_label(request: Request) -> str:
+    return "разработчик" if is_dev(request) else "админ"
+
+@app.get("/support/my", response_class=HTMLResponse)
+def support_my(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT * FROM support_tickets WHERE reporter_role = ? ORDER BY id DESC", (reporter_label(request),)
+    ).fetchall()
+    conn.close()
+    return templates.TemplateResponse("support_my.html", {"request": request, "tickets": [dict(r) for r in rows]})
+
+@app.get("/support/new", response_class=HTMLResponse)
+def support_new(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    return templates.TemplateResponse(
+        "support_ticket.html", {"request": request, "default_contact": "", "error": None}
+    )
+
+@app.post("/support/create")
+async def support_create(
+    request: Request,
+    subject: str = Form(...),
+    description: str = Form(...),
+    contact: str = Form(""),
+    screenshot: UploadFile = File(None),
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    subject = subject.strip()[:200]
+    description = description.strip()[:5000]
+    if not subject or not description:
+        return templates.TemplateResponse(
+            "support_ticket.html",
+            {"request": request, "default_contact": contact, "error": "Заполните тему и описание."},
+            status_code=400,
+        )
+    shot_path = ""
+    if screenshot is not None and screenshot.filename:
+        ext = os.path.splitext(screenshot.filename)[1].lower()
+        data = await screenshot.read()
+        if ext not in SUPPORT_ALLOWED_EXT or not data:
+            return templates.TemplateResponse(
+                "support_ticket.html",
+                {"request": request, "default_contact": contact, "error": "Скриншот должен быть картинкой (png, jpg, gif, webp)."},
+                status_code=400,
+            )
+        if len(data) > SUPPORT_MAX_BYTES:
+            return templates.TemplateResponse(
+                "support_ticket.html",
+                {"request": request, "default_contact": contact, "error": "Скриншот больше 5 МБ."},
+                status_code=400,
+            )
+        SUPPORT_DIR.mkdir(parents=True, exist_ok=True)
+        fname = f"{secrets.token_hex(8)}{ext}"
+        (SUPPORT_DIR / fname).write_bytes(data)
+        shot_path = f"/support/shot/{fname}"
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO support_tickets (created_at, reporter_role, reporter_contact, subject, description, screenshot_path, status) "
+        "VALUES (?, ?, ?, ?, ?, ?, 'open')",
+        (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), reporter_label(request), contact.strip()[:200], subject, description, shot_path),
+    )
+    conn.commit()
+    conn.close()
+    log_action(request, "заявка в поддержку", subject)
+    return toast_redirect("/support/my", "Заявка отправлена ✓")
+
+@app.get("/support/shot/{name}")
+def support_shot(request: Request, name: str):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    safe = os.path.basename(name)
+    path = SUPPORT_DIR / safe
+    if safe != name or not path.is_file():
+        return HTMLResponse(content="Не найдено", status_code=404)
+    return FileResponse(path)
+
+@app.get("/dev/tickets", response_class=HTMLResponse)
+def dev_tickets(request: Request):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    conn = get_db_connection()
+    rows = conn.execute("SELECT * FROM support_tickets ORDER BY id DESC").fetchall()
+    conn.close()
+    return templates.TemplateResponse("dev_tickets.html", {"request": request, "tickets": [dict(r) for r in rows]})
+
+@app.post("/dev/tickets/update/{ticket_id}")
+def dev_tickets_update(request: Request, ticket_id: int, status: str = Form("open"), note: str = Form("")):
+    if not is_dev(request):
+        return RedirectResponse(url="/dev/login", status_code=303)
+    if status not in ("open", "in_progress", "resolved", "closed"):
+        status = "open"
+    conn = get_db_connection()
+    if note.strip():
+        conn.execute(
+            "UPDATE support_tickets SET status = ?, resolution_note = ?, updated_at = ? WHERE id = ?",
+            (status, note.strip()[:1000], datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ticket_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ?",
+            (status, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ticket_id),
+        )
+    conn.commit()
+    conn.close()
+    log_action(request, "заявка обновлена", f"№{ticket_id}: {status}")
+    return toast_redirect("/dev/tickets", "Заявка обновлена")
+
+# ---------------------------------------------------------------------------
+# Тревожные студенты и почтовая сводка
+# ---------------------------------------------------------------------------
+EMAIL_RE = re.compile(r"^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$")
+
+def compute_alerts() -> list:
+    now = datetime.now()
+    d14 = (now - timedelta(days=14)).strftime("%Y-%m-%d") + " 00:00:00"
+    d30 = (now - timedelta(days=30)).strftime("%Y-%m-%d") + " 00:00:00"
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT student_name, student_group, violation_type, created_at FROM violations "
+        "WHERE deleted_at IS NULL AND created_at >= ?",
+        (d30,),
+    ).fetchall()
+    conn.close()
+    per: dict = {}
+    for r in rows:
+        rec = per.setdefault(
+            r["student_name"],
+            {"groups": set(), "types": Counter(), "count30": 0, "count14": 0, "last": ""},
+        )
+        rec["groups"].add(r["student_group"])
+        rec["types"][r["violation_type"]] += 1
+        rec["count30"] += 1
+        if r["created_at"] >= d14:
+            rec["count14"] += 1
+        if r["created_at"] > rec["last"]:
+            rec["last"] = r["created_at"]
+    threshold = max(3, get_deviant_min())
+    alerts = []
+    for name, rec in per.items():
+        reasons = []
+        if rec["count14"] >= threshold:
+            reasons.append(f"{rec['count14']} нарушений за 14 дней")
+        top_type, top_n = rec["types"].most_common(1)[0]
+        if top_n >= 3:
+            reasons.append(f"«{top_type}» — {top_n} раз за 30 дней")
+        if reasons:
+            alerts.append(
+                {
+                    "name": name,
+                    "groups": ", ".join(sorted(rec["groups"])),
+                    "count": rec["count30"],
+                    "types": ", ".join(t for t, _ in rec["types"].most_common()),
+                    "reasons": "; ".join(reasons),
+                    "last": rec["last"],
+                }
+            )
+    alerts.sort(key=lambda a: (-a["count"], a["name"]))
+    return alerts
+
+def get_alert_emails() -> list:
+    raw = get_meta("alert_emails", "")
+    return [e.strip() for e in re.split(r"[,;\s]+", raw) if e.strip()]
+
+@app.get("/admin/alerts", response_class=HTMLResponse)
+def admin_alerts(request: Request):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    return templates.TemplateResponse(
+        "alerts.html",
+        {
+            "request": request,
+            "alerts": compute_alerts(),
+            "emails": ", ".join(get_alert_emails()),
+            "last_send": get_meta("alert_last_send", "—"),
+            "smtp_host": os.environ.get("SMTP_HOST", ""),
+        },
+    )
+
+@app.post("/admin/alerts/emails")
+def admin_alerts_emails(request: Request, emails: str = Form("")):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    items = [e.strip() for e in re.split(r"[,;\s]+", emails) if e.strip()]
+    bad = [e for e in items if not EMAIL_RE.match(e)]
+    if bad:
+        return toast_redirect("/admin/alerts", "Неверный адрес: " + bad[0])
+    set_meta("alert_emails", ", ".join(items))
+    log_action(request, "адреса рассылки сводки", ", ".join(items) or "очищены")
+    return toast_redirect("/admin/alerts", "Адреса сохранены")
+
+def send_alert_digest() -> bool:
+    host = os.environ.get("SMTP_HOST", "")
+    recipients = get_alert_emails()
+    if not host or not recipients:
+        return False
+    alerts = compute_alerts()
+    today = datetime.now().strftime("%d.%m.%Y")
+    lines = [f"Сводка патрульной службы на {today}", ""]
+    if alerts:
+        lines.append(f"Требуют внимания: {len(alerts)}")
+        for a in alerts:
+            lines.append(f"- {a['name']} ({a['groups']}): {a['reasons']}")
+    else:
+        lines.append("Тревожных студентов нет.")
+    msg = MIMEText("\n".join(lines), "plain", "utf-8")
+    user = os.environ.get("SMTP_USER", "")
+    sender = os.environ.get("SMTP_FROM", user) or user
+    msg["Subject"] = f"Патрульная служба: сводка {today}"
+    msg["From"] = sender
+    msg["To"] = ", ".join(recipients)
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    if port == 465:
+        server = smtplib.SMTP_SSL(host, port, timeout=20)
+    else:
+        server = smtplib.SMTP(host, port, timeout=20)
+        server.starttls()
+    try:
+        if user:
+            server.login(user, os.environ.get("SMTP_PASSWORD", ""))
+        server.sendmail(sender, recipients, msg.as_string())
+    finally:
+        server.quit()
+    set_meta("alert_last_send", datetime.now().strftime("%d.%m.%Y %H:%M"))
+    return True
+
+_ALERT_THREAD_STARTED = False
+
+def start_alert_scheduler() -> None:
+    global _ALERT_THREAD_STARTED
+    if _ALERT_THREAD_STARTED or not os.environ.get("SMTP_HOST"):
+        return
+    _ALERT_THREAD_STARTED = True
+
+    def loop() -> None:
+        while True:
+            try:
+                now = datetime.now()
+                today = now.strftime("%Y-%m-%d")
+                if now.hour == 8 and get_meta("alert_last_send_day") != today:
+                    set_meta("alert_last_send_day", today)
+                    send_alert_digest()
+            except Exception as exc:
+                log_error("alert-digest", f"{type(exc).__name__}: {exc}")
+            time.sleep(60)
+
+    threading.Thread(target=loop, daemon=True).start()
+
+# ---------------------------------------------------------------------------
+# Докладная записка за период
+# ---------------------------------------------------------------------------
+@app.get("/admin/memo", response_class=HTMLResponse)
+def admin_memo(
+    request: Request,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    department: Optional[str] = None,
+):
+    if not is_admin(request):
+        return RedirectResponse(url="/login", status_code=303)
+    now = datetime.now()
+    if not date_from:
+        date_from = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    if not date_to:
+        date_to = now.strftime("%Y-%m-%d")
+    departments = get_departments()
+    query = "SELECT * FROM violations WHERE deleted_at IS NULL AND created_at >= ? AND created_at <= ?"
+    params = [date_from + " 00:00:00", date_to + " 23:59:59"]
+    if department:
+        query += " AND student_group LIKE ?"
+        params.append(f"{department}%")
+    conn = get_db_connection()
+    rows = conn.execute(query, params).fetchall()
+    conn.close()
+    by_type = Counter(r["violation_type"] for r in rows).most_common()
+    top_students = Counter(r["student_name"] for r in rows).most_common(5)
+    return templates.TemplateResponse(
+        "memo.html",
+        {
+            "request": request,
+            "generated": now.strftime("%d.%m.%Y"),
+            "period_start": date_from,
+            "period_end": date_to,
+            "dept_name": departments.get(department or "", ""),
+            "total": len(rows),
+            "by_type": by_type,
+            "top_students": [(n, c) for n, c in top_students if c > 1],
+        },
+    )
+
 # ---------------------------------------------------------------------------
 # Бот мессенджера MAX (запускается только при заданном MAX_BOT_TOKEN)
 # ---------------------------------------------------------------------------
