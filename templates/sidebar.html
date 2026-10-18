@@ -48,4 +48,21 @@
         </div>
 
         {% if is_dev(request) %}
-        <div class="sidebar-group {% if request.url.p 
+        <div class="sidebar-group {% if request.url.path in ['/dev/system', '/dev/errors', '/dev/tools', '/admin/trash', '/admin/audit'] %}open{% endif %}">
+            <button class="sidebar-group-btn" onclick="toggleMenuGroup(this)">Разработчик <span class="arrow">▼</span></button>
+            <div class="sidebar-sub">
+                <a href="/dev/system" class="sidebar-sublink {% if request.url.path == '/dev/system' %}active{% endif %}">Система</a>
+                <a href="/dev/errors" class="sidebar-sublink {% if request.url.path == '/dev/errors' %}active{% endif %}">Журнал ошибок</a>
+                <a href="/dev/tools" class="sidebar-sublink {% if request.url.path == '/dev/tools' %}active{% endif %}">Инструменты и бэкап</a>
+                <a href="/admin/trash" class="sidebar-sublink {% if request.url.path == '/admin/trash' %}active{% endif %}">Корзина</a>
+                <a href="/admin/audit" class="sidebar-sublink {% if request.url.path == '/admin/audit' %}active{% endif %}">Журнал действий</a>
+            </div>
+        </div>
+        {% endif %}
+    </nav>
+
+    <div class="sidebar-footer">
+        <button class="sidebar-link" onclick="toggleTheme()">Сменить тему</button>
+        <a href="/admin/logout" class="sidebar-link danger">Выйти</a>
+    </div>
+</aside>
